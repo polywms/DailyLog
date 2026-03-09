@@ -135,7 +135,7 @@
         <div id="kontenBelumAdaNama" style="display: none;">
             <i class="fa-solid fa-user-shield" style="font-size: 45px; color: var(--primary); margin-bottom: 15px;"></i>
             <h3 style="margin-top:0; border-bottom: none; color: var(--text-main);">Selamat Datang!</h3>
-            <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 25px;">Sistem mendeteksi Anda belum memasukkan nama. Silakan atur Identitas Teknisi Anda sebelum mulai bekerja.</p>
+            <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 25px;">Silakan atur Identitas / Nama Anda sebelum mulai bekerja.</p>
             <button class="btn-primary" onclick="tutorBukaIdentitas()" style="margin-top: 0;">
                 <i class="fa-solid fa-gear"></i> Buka Pengaturan Identitas
             </button>
@@ -220,22 +220,22 @@
                 <label>Jam Mulai</label>
                 <div class="time-wrapper">
                     <input type="time" id="jamMulai">
-                    <button class="btn-time" onclick="setWaktuSekarang('jamMulai')"><i class="fa-solid fa-clock"></i>Skrg</button>
+                    <button class="btn-time" onclick="setWaktuSekarang('jamMulai')"><i class="fa-solid fa-clock"></i>Now</button>
                 </div>
             </div>
             <div>
                 <label>Jam Selesai</label>
                 <div class="time-wrapper">
                     <input type="time" id="jamSelesai">
-                    <button class="btn-time" onclick="setWaktuSekarang('jamSelesai')"><i class="fa-solid fa-clock"></i>Skrg</button>
+                    <button class="btn-time" onclick="setWaktuSekarang('jamSelesai')"><i class="fa-solid fa-clock"></i>Now</button>
                 </div>
             </div>
         </div>
 
-        <label>Detail Pekerjaan</label>
+        <label>Detail Pekerjaan [Wajib isi]</label>
         <textarea id="detail" placeholder="Jelaskan apa saja yang dikerjakan... Tulis 'Lancar' kalau tidak ada masalah"></textarea>
 
-        <label>Kendala (Kosongkan jika lancar)</label>
+        <label>Kendala [Kosongkan jika lancar]</label>
         <input type="text" id="kendala" placeholder="Misal: WIP COMP, Alamat Tdk Ketemu">
 
         <button class="btn-primary" onclick="simpanLog()" id="btnSimpan"><i class="fa-solid fa-floppy-disk"></i> SIMPAN PEKERJAAN</button>
@@ -577,3 +577,4 @@
 
 </body>
 </html>
+
