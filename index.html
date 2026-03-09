@@ -7,20 +7,16 @@
 
     <link rel="icon" type="image/png" sizes="192x192" href="icon.png">
     <link rel="icon" type="image/png" sizes="512x512" href="icon.png">
-    
     <link rel="apple-touch-icon" href="icon.png">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black">
 
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#d92534">
-    
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Artemis Log">
     <meta name="mobile-web-app-capable" content="yes">
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <style>
@@ -83,17 +79,18 @@
             justify-content: center;
             gap: 4px;
         }
-        .btn-time i {
-            font-size: 14px;
-        }
+        .btn-time i { font-size: 14px; }
         .btn-time:active { background: #e9ecef; }
         
         .btn-primary { background: var(--primary); color: white; border: none; padding: 14px; width: 100%; border-radius: 6px; font-size: 14px; font-weight: 700; margin-top: 25px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px rgba(217, 37, 52, 0.2); display: flex; justify-content: center; align-items: center; gap: 8px; }
         .btn-primary:active { transform: scale(0.98); background: var(--primary-dark); }
         
-        .btn-outline { background: white; border: 1px solid var(--border); color: var(--text-main); padding: 12px; width: 100%; border-radius: 6px; font-size: 13px; font-weight: 600; margin-top: 10px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; }
+        .btn-outline { background: white; border: 1px solid var(--border); color: var(--text-main); padding: 12px; width: 100%; border-radius: 6px; font-size: 13px; font-weight: 600; margin-top: 10px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; transition: 0.2s;}
         .btn-outline:active { background: #f8f9fa; }
         .btn-danger { color: var(--primary); border-color: #f5c6cb; background: #f8d7da; margin-top: 15px; }
+
+        .btn-outline-primary { background: white; border: 2px solid var(--primary); color: var(--primary); padding: 12px; width: 100%; border-radius: 6px; font-size: 14px; font-weight: 700; margin-top: 10px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; transition: 0.2s; }
+        .btn-outline-primary:active { background: #fef2f2; }
 
         .timeline { list-style: none; padding: 0; margin: 30px 0 0 0; border-top: 2px solid #f8f9fa; padding-top: 20px; }
         .timeline li { padding: 15px; border-left: 4px solid var(--primary); border-radius: 0 6px 6px 0; margin-bottom: 12px; background: #f8f9fa; position: relative; }
@@ -104,7 +101,7 @@
         
         .empty-state { text-align: center; color: var(--text-muted); padding: 20px; font-size: 13px; }
 
-        #modalBulanan {
+        .modal-overlay {
             display: none; 
             position: fixed; 
             top: 0; 
@@ -132,7 +129,35 @@
 </head>
 <body>
 
-<div id="modalBulanan">
+<div id="modalNamaHarian" class="modal-overlay">
+    <div class="modal-content" style="text-align: center;">
+        
+        <div id="kontenBelumAdaNama" style="display: none;">
+            <i class="fa-solid fa-user-shield" style="font-size: 45px; color: var(--primary); margin-bottom: 15px;"></i>
+            <h3 style="margin-top:0; border-bottom: none; color: var(--text-main);">Selamat Datang!</h3>
+            <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 25px;">Sistem mendeteksi Anda belum memasukkan nama. Silakan atur Identitas Teknisi Anda sebelum mulai bekerja.</p>
+            <button class="btn-primary" onclick="tutorBukaIdentitas()" style="margin-top: 0;">
+                <i class="fa-solid fa-gear"></i> Buka Pengaturan Identitas
+            </button>
+        </div>
+        
+        <div id="kontenKonfirmasiNama" style="display: none;">
+            <i class="fa-solid fa-circle-user" style="font-size: 45px; color: var(--primary); margin-bottom: 15px;"></i>
+            <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 5px; font-weight: 600;">Catatan Harian Untuk Teknisi :</p>
+            <h2 id="teksNamaTeknisi" style="margin: 0 0 25px 0; color: var(--primary); font-size: 22px;">NAMA</h2>
+            
+            <button class="btn-primary" onclick="konfirmasiNamaSiap()" style="margin-top: 0;">
+                <i class="fa-solid fa-check-circle"></i> Ya, Siap Kerja
+            </button>
+            <button class="btn-outline-primary" onclick="tutorBukaIdentitas()">
+                Bukan, ganti teknisi
+            </button>
+        </div>
+
+    </div>
+</div>
+
+<div id="modalBulanan" class="modal-overlay">
     <div class="modal-content">
         <h3 style="margin-top:0; border-bottom: none; padding-bottom: 0; font-size: 18px; color: var(--primary);">
             <i class="fa-regular fa-calendar-check"></i> Tugas Bulan Ini
@@ -195,14 +220,14 @@
                 <label>Jam Mulai</label>
                 <div class="time-wrapper">
                     <input type="time" id="jamMulai">
-                    <button class="btn-time" onclick="setWaktuSekarang('jamMulai')"><i class="fa-solid fa-clock"></i>Now</button>
+                    <button class="btn-time" onclick="setWaktuSekarang('jamMulai')"><i class="fa-solid fa-clock"></i>Skrg</button>
                 </div>
             </div>
             <div>
                 <label>Jam Selesai</label>
                 <div class="time-wrapper">
                     <input type="time" id="jamSelesai">
-                    <button class="btn-time" onclick="setWaktuSekarang('jamSelesai')"><i class="fa-solid fa-clock"></i>Now</button>
+                    <button class="btn-time" onclick="setWaktuSekarang('jamSelesai')"><i class="fa-solid fa-clock"></i>Skrg</button>
                 </div>
             </div>
         </div>
@@ -273,6 +298,45 @@
         }
         terapkanModePenugasan();
 
+        cekModalNamaHarian();
+    }
+
+    function cekModalNamaHarian() {
+        const nama = localStorage.getItem('logSettingNama');
+        const tglKonfirmasi = localStorage.getItem('logTanggalKonfirmasiNama');
+        const tglHariIni = new Date().toLocaleDateString('id-ID');
+
+        const modal = document.getElementById('modalNamaHarian');
+        const divBelumAda = document.getElementById('kontenBelumAdaNama');
+        const divKonfirmasi = document.getElementById('kontenKonfirmasiNama');
+
+        if (!nama || nama.trim() === "") {
+            divBelumAda.style.display = 'block';
+            divKonfirmasi.style.display = 'none';
+            modal.style.display = 'flex';
+        } else if (tglKonfirmasi !== tglHariIni) {
+            document.getElementById('teksNamaTeknisi').innerText = nama;
+            divBelumAda.style.display = 'none';
+            divKonfirmasi.style.display = 'block';
+            modal.style.display = 'flex';
+        } else {
+            cekModalBulanan();
+        }
+    }
+
+    function tutorBukaIdentitas() {
+        document.getElementById('modalNamaHarian').style.display = 'none';
+        switchTab('identitas');
+        setTimeout(() => {
+            document.getElementById('nama').focus();
+        }, 100);
+    }
+
+    function konfirmasiNamaSiap() {
+        const tglHariIni = new Date().toLocaleDateString('id-ID');
+        localStorage.setItem('logTanggalKonfirmasiNama', tglHariIni);
+        document.getElementById('modalNamaHarian').style.display = 'none';
+        
         cekModalBulanan();
     }
 
@@ -512,10 +576,4 @@
 </script>
 
 </body>
-
 </html>
-
-
-
-
-
