@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Daily Log Teknisi - Artemis</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #d92534; 
+            --primary-dark: #b81f2c; 
+            --bg: #e9ecef; 
+            --surface: #ffffff; 
+            --border: #dee2e6; 
+            --text-main: #495057; 
+            --text-muted: #868e96; 
+        }
+
+        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { background-color: var(--bg); margin: 0; padding: 10px; color: var(--text-main); display: flex; justify-content: center; }
+        
+        .app-container { background: var(--surface); width: 100%; max-width: 480px; min-height: 95vh; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); overflow: hidden; display: flex; flex-direction: column; border-top: 5px solid var(--primary); }
+        
+        .app-header { padding: 15px 20px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+        .app-header h1 { margin: 0; font-size: 18px; color: var(--primary); font-weight: 700; }
+        .app-header i { font-size: 20px; color: var(--primary); }
+        
+        .tabs { display: flex; border-bottom: 1px solid var(--border); background: #f8f9fa; }
+        .tab-btn { flex: 1; padding: 14px 0; text-align: center; font-weight: 600; font-size: 14px; color: var(--text-muted); cursor: pointer; background: none; border: none; border-bottom: 3px solid transparent; outline: none; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .tab-btn.active { color: var(--primary); border-bottom: 3px solid var(--primary); background: var(--surface); }
+
+        .content { padding: 20px; display: none; }
+        .content.active { display: block; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        h3 { margin: 0 0 15px 0; font-size: 16px; font-weight: 600; color: var(--text-main); border-bottom: 1px dashed var(--border); padding-bottom: 10px; }
+        label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px; display: block; margin-top: 15px; }
+        
+        input, select, textarea { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 6px; background: #fff; font-size: 14px; color: var(--text-main); outline: none; transition: 0.2s; }
+        input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(217, 37, 52, 0.1); }
+        textarea { resize: vertical; min-height: 90px; }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        
+        .radio-toggle { display: flex; background: #f8f9fa; border: 1px solid var(--border); border-radius: 6px; padding: 3px; gap: 3px; margin-bottom: 10px; }
+        .radio-toggle label { margin: 0; flex: 1; text-align: center; padding: 10px; font-size: 13px; font-weight: 600; color: var(--text-muted); border-radius: 4px; cursor: pointer; text-transform: none; transition: 0.2s; }
+        .radio-toggle input { display: none; }
+        .radio-toggle input:checked + label { background: var(--primary); color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+
+        .time-wrapper { display: flex; gap: 8px; }
+        .btn-time { 
+            background: #f8f9fa; 
+            color: var(--text-main); 
+            border: 1px solid var(--border); 
+            padding: 6px 10px;
+            border-radius: 6px; 
+            font-weight: 600; 
+            font-size: 10px;
+            cursor: pointer; 
+            white-space: nowrap; 
+            transition: 0.2s; 
+            display: flex; 
+            flex-direction: column;
+            align-items: center; 
+            justify-content: center;
+            gap: 4px;
+        }
+        .btn-time i {
+            font-size: 14px;
+        }
+        .btn-time:active { background: #e9ecef; }
+        
+        .btn-primary { background: var(--primary); color: white; border: none; padding: 14px; width: 100%; border-radius: 6px; font-size: 14px; font-weight: 700; margin-top: 25px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px rgba(217, 37, 52, 0.2); display: flex; justify-content: center; align-items: center; gap: 8px; }
+        .btn-primary:active { transform: scale(0.98); background: var(--primary-dark); }
+        
+        .btn-outline { background: white; border: 1px solid var(--border); color: var(--text-main); padding: 12px; width: 100%; border-radius: 6px; font-size: 13px; font-weight: 600; margin-top: 10px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; }
+        .btn-outline:active { background: #f8f9fa; }
+        .btn-danger { color: var(--primary); border-color: #f5c6cb; background: #f8d7da; margin-top: 15px; }
+
+        .timeline { list-style: none; padding: 0; margin: 30px 0 0 0; border-top: 2px solid #f8f9fa; padding-top: 20px; }
+        .timeline li { padding: 15px; border-left: 4px solid var(--primary); border-radius: 0 6px 6px 0; margin-bottom: 12px; background: #f8f9fa; position: relative; }
+        .timeline-time { font-size: 12px; font-weight: 700; color: var(--primary); margin-bottom: 4px; display: flex; align-items: center; gap: 5px; }
+        .timeline-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; color: var(--text-main); }
+        .timeline-desc { font-size: 13px; color: var(--text-muted); line-height: 1.4; }
+        .timeline-gps { font-size: 11px; color: #adb5bd; margin-top: 8px; display: flex; align-items: center; gap: 5px; }
+        
+        .empty-state { text-align: center; color: var(--text-muted); padding: 20px; font-size: 13px; }
+
+        #modalBulanan {
+            display: none; 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: rgba(0,0,0,0.6); 
+            z-index: 1000; 
+            justify-content: center; 
+            align-items: center; 
+            padding: 20px;
+            backdrop-filter: blur(3px);
+        }
+        .modal-content {
+            background: var(--surface); 
+            width: 100%; 
+            max-width: 360px; 
+            border-radius: 12px; 
+            padding: 24px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3); 
+            border-top: 6px solid var(--primary);
+            animation: fadeIn 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+
+<div id="modalBulanan">
+    <div class="modal-content">
+        <h3 style="margin-top:0; border-bottom: none; padding-bottom: 0; font-size: 18px; color: var(--primary);">
+            <i class="fa-regular fa-calendar-check"></i> Tugas Bulan Ini
+        </h3>
+        <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.5;">
+            Bulan baru telah tiba! Silakan pilih mode penugasan Anda untuk bulan ini:
+        </p>
+        
+        <div class="radio-toggle" style="margin-bottom: 20px;">
+            <input type="radio" id="modalModeLapangan" name="modalTipe" value="Kunjungan" checked>
+            <label for="modalModeLapangan">Kunjungan</label>
+            
+            <input type="radio" id="modalModeCS" name="modalTipe" value="Tugas Internal / CS">
+            <label for="modalModeCS">Indoor / CS</label>
+        </div>
+        
+        <button class="btn-primary" onclick="konfirmasiModalBulanan()" style="margin-top: 0;">
+            <i class="fa-solid fa-check"></i> OK, SIMPAN
+        </button>
+    </div>
+</div>
+
+<div class="app-container">
+    <div class="app-header">
+        <i class="fa-solid fa-crosshairs"></i>
+        <h1>Teknisi Daily Log</h1>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('harian')" id="btn-harian"><i class="fa-solid fa-list-check"></i> Harian</button>
+        <button class="tab-btn" onclick="switchTab('identitas')" id="btn-identitas"><i class="fa-solid fa-user-gear"></i> Identitas</button>
+    </div>
+
+    <div id="tab-harian" class="content active">
+        
+        <div id="areaLapangan">
+            <div class="grid-2">
+                <div>
+                    <label>Nama Customer</label>
+                    <input type="text" id="namaCustomer" placeholder="Nama Toko/Orang">
+                </div>
+                <div>
+                    <label>Area / Alamat</label>
+                    <input type="text" id="alamatCustomer" placeholder="Misal: Bandongan">
+                </div>
+            </div>
+        </div>
+
+        <div id="areaInternal" style="display: none;">
+            <label>Jenis Tugas</label>
+            <select id="jenisTugas">
+                <option value="Mengerjakan Unit Masuk">Mengerjakan Unit Masuk</option>
+                <option value="Edukasi Customer">Edukasi Customer</option>
+                <option value="Lainnya">Lainnya</option>
+            </select>
+        </div>
+
+        <div class="grid-2">
+            <div>
+                <label>Jam Mulai</label>
+                <div class="time-wrapper">
+                    <input type="time" id="jamMulai">
+                    <button class="btn-time" onclick="setWaktuSekarang('jamMulai')"><i class="fa-solid fa-clock"></i>Skrg</button>
+                </div>
+            </div>
+            <div>
+                <label>Jam Selesai</label>
+                <div class="time-wrapper">
+                    <input type="time" id="jamSelesai">
+                    <button class="btn-time" onclick="setWaktuSekarang('jamSelesai')"><i class="fa-solid fa-clock"></i>Skrg</button>
+                </div>
+            </div>
+        </div>
+
+        <label>Detail Pekerjaan</label>
+        <textarea id="detail" placeholder="Jelaskan apa saja yang dikerjakan..."></textarea>
+
+        <label>Kendala / Status</label>
+        <input type="text" id="kendala" placeholder="Misal: WIP COMP, Tunggu Part (Kosongkan jika lancar)">
+
+        <button class="btn-primary" onclick="simpanLog()" id="btnSimpan"><i class="fa-solid fa-floppy-disk"></i> SIMPAN PEKERJAAN</button>
+
+        <ul class="timeline" id="listLog">
+        </ul>
+        
+        <div style="margin-top: 15px;" id="exportArea">
+            <button class="btn-outline" onclick="exportExcel()"><i class="fa-solid fa-file-excel" style="color:#217346;"></i> Download Laporan Excel</button>
+            <button class="btn-outline btn-danger" onclick="hapusSemua()"><i class="fa-solid fa-trash-can"></i> Reset Data Hari Ini</button>
+        </div>
+    </div>
+
+    <div id="tab-identitas" class="content">
+        <h3>Pengaturan Teknisi</h3>
+        <p style="font-size: 13px; color: var(--text-muted); margin-top: -5px; margin-bottom: 20px;">
+            Atur identitas dan mode pekerjaan. Pengaturan ini tersimpan otomatis.
+        </p>
+
+        <div class="grid-2">
+            <div>
+                <label>Nama Teknisi</label>
+                <input type="text" id="nama" placeholder="Nama Anda..." oninput="simpanNama()">
+            </div>
+            <div>
+                <label>Tanggal</label>
+                <input type="text" id="tanggal" readonly style="color: var(--text-muted); background: #f8f9fa;">
+            </div>
+        </div>
+
+        <label>Mode Penugasan Saat Ini</label>
+        <div class="radio-toggle">
+            <input type="radio" id="modeLapangan" name="tipe" value="Kunjungan" onchange="gantiMode(this)">
+            <label for="modeLapangan">Kunjungan</label>
+            
+            <input type="radio" id="modeCS" name="tipe" value="Tugas Internal / CS" onchange="gantiMode(this)">
+            <label for="modeCS">Internal/CS</label>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const today = new Date();
+    const dateString = today.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    document.getElementById('tanggal').value = dateString;
+
+    let logData = JSON.parse(localStorage.getItem('dailyLogTeknisi')) || [];
+    
+    window.onload = function() {
+        tampilkanLog();
+        const savedName = localStorage.getItem('logSettingNama');
+        const savedTipe = localStorage.getItem('logSettingTipe') || 'Kunjungan'; 
+        
+        if (savedName) document.getElementById('nama').value = savedName;
+        if (savedTipe === 'Kunjungan') {
+            document.getElementById('modeLapangan').checked = true;
+        } else {
+            document.getElementById('modeCS').checked = true;
+        }
+        terapkanModePenugasan();
+
+        cekModalBulanan();
+    }
+
+    function cekModalBulanan() {
+        const d = new Date();
+        const tglSekarang = d.getDate();
+        const bulanTahunIni = d.getMonth() + "-" + d.getFullYear(); 
+        const bulanTahunTersimpan = localStorage.getItem('logBulanModalMuncul');
+
+        if (tglSekarang === 1 && bulanTahunTersimpan !== bulanTahunIni) {
+            document.getElementById('modalBulanan').style.display = 'flex';
+        }
+    }
+
+    function konfirmasiModalBulanan() {
+        const tipeDipilih = document.querySelector('input[name="modalTipe"]:checked').value;
+        localStorage.setItem('logSettingTipe', tipeDipilih);
+        
+        if (tipeDipilih === 'Kunjungan') {
+            document.getElementById('modeLapangan').checked = true;
+        } else {
+            document.getElementById('modeCS').checked = true;
+        }
+        
+        terapkanModePenugasan();
+
+        const d = new Date();
+        const bulanTahunIni = d.getMonth() + "-" + d.getFullYear();
+        localStorage.setItem('logBulanModalMuncul', bulanTahunIni);
+        document.getElementById('modalBulanan').style.display = 'none';
+    }
+
+    function switchTab(tabId) {
+        document.querySelectorAll('.content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        
+        document.getElementById(`tab-${tabId}`).classList.add('active');
+        document.getElementById(`btn-${tabId}`).classList.add('active');
+    }
+
+    function simpanNama() {
+        const nama = document.getElementById('nama').value;
+        localStorage.setItem('logSettingNama', nama);
+    }
+
+    function gantiMode(elemen) {
+        const tipeLama = localStorage.getItem('logSettingTipe') || 'Kunjungan';
+        const tipeBaru = elemen.value;
+
+        if (tipeLama !== tipeBaru) {
+            if(confirm('Yakin ingin merubah mode penugasan menjadi ' + tipeBaru + '?')) {
+                localStorage.setItem('logSettingTipe', tipeBaru);
+                terapkanModePenugasan();
+            } else {
+                if (tipeLama === 'Kunjungan') {
+                    document.getElementById('modeLapangan').checked = true;
+                } else {
+                    document.getElementById('modeCS').checked = true;
+                }
+            }
+        }
+    }
+
+    function terapkanModePenugasan() {
+        const tipe = localStorage.getItem('logSettingTipe') || 'Kunjungan';
+        if (tipe === 'Kunjungan') {
+            document.getElementById('areaLapangan').style.display = 'block';
+            document.getElementById('areaInternal').style.display = 'none';
+        } else {
+            document.getElementById('areaLapangan').style.display = 'none';
+            document.getElementById('areaInternal').style.display = 'block';
+        }
+    }
+
+    function setWaktuSekarang(idInput) {
+        const now = new Date();
+        document.getElementById(idInput).value = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    }
+
+    function simpanLog() {
+        const nama = localStorage.getItem('logSettingNama');
+        const tipe = localStorage.getItem('logSettingTipe') || 'Kunjungan';
+        const jamMulai = document.getElementById('jamMulai').value;
+        const jamSelesai = document.getElementById('jamSelesai').value;
+        const detail = document.getElementById('detail').value;
+        const kendala = document.getElementById('kendala').value; 
+        
+        let namaKlien = '';
+        let alamatKlien = '';
+
+        if(!nama) {
+            alert('Silakan isi Nama Teknisi di tab "Identitas" terlebih dahulu!');
+            switchTab('identitas');
+            return;
+        }
+
+        if (tipe === 'Kunjungan') {
+            namaKlien = document.getElementById('namaCustomer').value;
+            alamatKlien = document.getElementById('alamatCustomer').value;
+            if(!namaKlien || !alamatKlien) {
+                alert('Harap isi Nama Customer dan Alamatnya!');
+                return;
+            }
+        } else {
+            namaKlien = document.getElementById('jenisTugas').value;
+            alamatKlien = "Internal / Kantor";
+        }
+
+        if(!jamMulai || !jamSelesai || !detail) {
+            alert('Harap isi jam dan detail pekerjaan!');
+            return;
+        }
+
+        const btnSimpan = document.getElementById('btnSimpan');
+        btnSimpan.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> MENCARI GPS...';
+        btnSimpan.disabled = true;
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => prosesSimpan(pos.coords.latitude + ", " + pos.coords.longitude),
+                (err) => prosesSimpan("GPS Offline/Ditolak"),
+                { timeout: 5000 }
+            );
+        } else {
+            prosesSimpan("Tanpa GPS");
+        }
+
+        function prosesSimpan(gps) {
+            const actualSubmitDate = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            
+            const dataBaru = { nama, tanggal: actualSubmitDate, jamMulai, jamSelesai, tipe, namaKlien, alamatKlien, detail, kendala, gps };
+
+            logData.push(dataBaru);
+            localStorage.setItem('dailyLogTeknisi', JSON.stringify(logData));
+            
+            document.getElementById('jamMulai').value = '';
+            document.getElementById('jamSelesai').value = '';
+            document.getElementById('namaCustomer').value = '';
+            document.getElementById('alamatCustomer').value = '';
+            document.getElementById('detail').value = '';
+            document.getElementById('kendala').value = ''; 
+            
+            btnSimpan.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> SIMPAN PEKERJAAN';
+            btnSimpan.disabled = false;
+            
+            tampilkanLog();
+        }
+    }
+
+    function tampilkanLog() {
+        const list = document.getElementById('listLog');
+        const exportArea = document.getElementById('exportArea');
+        list.innerHTML = '';
+        
+        if (logData.length === 0) {
+            list.innerHTML = '<li class="empty-state">Belum ada riwayat pekerjaan.</li>';
+            exportArea.style.display = 'none';
+            return;
+        }
+
+        exportArea.style.display = 'block';
+        
+        [...logData].reverse().forEach((log) => {
+            const li = document.createElement('li');
+            
+            let kendalaHTML = log.kendala ? `<div class="timeline-desc" style="color: var(--primary); font-weight: 600; margin-top: 4px;"><i class="fa-solid fa-triangle-exclamation"></i> Kendala: ${log.kendala}</div>` : '';
+            
+            let titleTampilan = log.namaKlien ? `${log.namaKlien} <span style="font-weight: normal; font-size: 12px; color: var(--text-muted);">| ${log.alamatKlien}</span>` : log.lokasiTugas;
+
+            li.innerHTML = `
+                <div class="timeline-time"><i class="fa-regular fa-calendar-days"></i> ${log.tanggal} &nbsp; <i class="fa-regular fa-clock"></i> ${log.jamMulai} - ${log.jamSelesai}</div>
+                <div class="timeline-title">${titleTampilan}</div>
+                <div class="timeline-desc">${log.detail}</div>
+                ${kendalaHTML}
+                <div class="timeline-gps"><i class="fa-solid fa-location-dot"></i> ${log.gps}</div>
+            `;
+            list.appendChild(li);
+        });
+    }
+
+    function exportExcel() {
+        if (logData.length === 0) {
+            alert('Belum ada data untuk di-download!');
+            return;
+        }
+
+        const header = [
+            "Nama Teknisi",
+            "Tipe Pekerjaan",
+            "Tanggal",
+            "Jam Mulai",
+            "Jam Selesai",
+            "Nama Customer / Tugas",
+            "Area / Alamat",
+            "Detail Pekerjaan",
+            "Kendala / Status",
+            "Koordinat GPS"
+        ];
+
+        const dataToExport = [header];
+
+        logData.forEach(row => {
+            let excNama = row.namaKlien ? row.namaKlien : (row.lokasiTugas ? row.lokasiTugas : "-");
+            let excAlamat = row.alamatKlien ? row.alamatKlien : (row.tipe === 'Kunjungan' ? "-" : "Internal");
+            let cleanKendala = row.kendala ? row.kendala : "-";
+
+            dataToExport.push([
+                row.nama,
+                row.tipe,
+                row.tanggal,
+                row.jamMulai,
+                row.jamSelesai,
+                excNama,
+                excAlamat,
+                row.detail,
+                cleanKendala,
+                row.gps
+            ]);
+        });
+
+        const worksheet = XLSX.utils.aoa_to_sheet(dataToExport);
+
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Daily Log");
+
+        const namaFile = `DailyLog_${logData[0].nama.replace(/ /g, "_")}_${new Date().getTime()}.xlsx`;
+        XLSX.writeFile(workbook, namaFile);
+    }
+
+    function hapusSemua() {
+        if(confirm('Yakin mereset log? Pastikan Anda sudah klik Download Laporan Excel sebelum mereset!')) {
+            localStorage.removeItem('dailyLogTeknisi');
+            logData = [];
+            tampilkanLog();
+        }
+    }
+</script>
+
+</body>
+</html>
