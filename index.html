@@ -17,7 +17,6 @@
     <meta name="mobile-web-app-capable" content="yes">
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <style>
         :root {
@@ -244,7 +243,6 @@
         </ul>
         
         <div style="margin-top: 15px;" id="exportArea">
-            <button class="btn-outline" onclick="exportExcel()"><i class="fa-solid fa-file-excel" style="color:#217346;"></i> Download Laporan Excel</button>
             <button class="btn-outline btn-danger" onclick="hapusSemua()"><i class="fa-solid fa-trash-can"></i> Reset Data Hari Ini</button>
         </div>
     </div>
@@ -279,6 +277,9 @@
 </div>
 
 <script>
+    // 1. PINDAHKAN SCRIPT URL KESINI (GLOBAL SCOPE)
+    const scriptURL = 'https://script.google.com/macros/s/AKfycbz26Ut7tFVm-22vNbAGnzSLMe9sak8_usjrwHT5AUoUL6NpnpghfdAEg1D7q0ECvGQg0Q/exec';
+
     const today = new Date();
     const dateString = today.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
     document.getElementById('tanggal').value = dateString;
@@ -299,6 +300,7 @@
         terapkanModePenugasan();
 
         cekModalNamaHarian();
+        jalankanSync();
     }
 
     function cekModalNamaHarian() {
@@ -464,38 +466,29 @@
             prosesSimpan("Tanpa GPS");
         }
 
-        const scriptURL = 'https://script.google.com/macros/s/AKfycbz26Ut7tFVm-22vNbAGnzSLMe9sak8_usjrwHT5AUoUL6NpnpghfdAEg1D7q0ECvGQg0Q/exec';
-
-        async function prosesSimpan(gps) {
+        function prosesSimpan(gps) {
             const actualSubmitDate = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
             const dataBaru = { nama, tanggal: actualSubmitDate, jamMulai, jamSelesai, tipe, namaKlien, alamatKlien, detail, kendala, gps };
 
-            try {
-                await fetch(scriptURL, {
-                    method: 'POST',
-                    body: JSON.stringify(dataBaru),
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
-                });
+            logData.push(dataBaru);
+            localStorage.setItem('dailyLogTeknisi', JSON.stringify(logData));
 
-                logData.push(dataBaru);
-                localStorage.setItem('dailyLogTeknisi', JSON.stringify(logData));
-                
-                document.getElementById('jamMulai').value = '';
-                document.getElementById('jamSelesai').value = '';
-                document.getElementById('namaCustomer').value = '';
-                document.getElementById('alamatCustomer').value = '';
-                document.getElementById('detail').value = '';
-                document.getElementById('kendala').value = ''; 
-                
-                btnSimpan.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> SIMPAN PEKERJAAN';
-                btnSimpan.disabled = false;
-                
-                tampilkanLog();
-            } catch (error) {
-                alert('Gagal mengirim data ke server. Cek koneksi internet Anda.');
-                btnSimpan.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> SIMPAN PEKERJAAN';
-                btnSimpan.disabled = false;
-            }
+            let antrean = JSON.parse(localStorage.getItem('antreanLog')) || [];
+            antrean.push(dataBaru);
+            localStorage.setItem('antreanLog', JSON.stringify(antrean));
+            
+            document.getElementById('jamMulai').value = '';
+            document.getElementById('jamSelesai').value = '';
+            document.getElementById('namaCustomer').value = '';
+            document.getElementById('alamatCustomer').value = '';
+            document.getElementById('detail').value = '';
+            document.getElementById('kendala').value = ''; 
+            
+            btnSimpan.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> SIMPAN PEKERJAAN';
+            btnSimpan.disabled = false;
+            
+            tampilkanLog();
+            jalankanSync();
         }
     }
 
@@ -530,62 +523,50 @@
         });
     }
 
-    function exportExcel() {
-        if (logData.length === 0) {
-            alert('Belum ada data untuk di-download!');
-            return;
-        }
-
-        const header = [
-            "Nama Teknisi",
-            "Tipe Pekerjaan",
-            "Tanggal",
-            "Jam Mulai",
-            "Jam Selesai",
-            "Nama Customer / Tugas",
-            "Area / Alamat",
-            "Detail Pekerjaan",
-            "Kendala / Status",
-            "Koordinat GPS"
-        ];
-
-        const dataToExport = [header];
-
-        logData.forEach(row => {
-            let excNama = row.namaKlien ? row.namaKlien : (row.lokasiTugas ? row.lokasiTugas : "-");
-            let excAlamat = row.alamatKlien ? row.alamatKlien : (row.tipe === 'Kunjungan' ? "-" : "Internal");
-            let cleanKendala = row.kendala ? row.kendala : "-";
-
-            dataToExport.push([
-                row.nama,
-                row.tipe,
-                row.tanggal,
-                row.jamMulai,
-                row.jamSelesai,
-                excNama,
-                excAlamat,
-                row.detail,
-                cleanKendala,
-                row.gps
-            ]);
-        });
-
-        const worksheet = XLSX.utils.aoa_to_sheet(dataToExport);
-
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Daily Log");
-
-        const namaFile = `DailyLog_${logData[0].nama.replace(/ /g, "_")}_${new Date().getTime()}.xlsx`;
-        XLSX.writeFile(workbook, namaFile);
-    }
-
     function hapusSemua() {
-        if(confirm('Yakin mereset log? Pastikan Anda sudah klik Download Laporan Excel sebelum mereset!')) {
+        if(confirm('Yakin mereset log hari ini?')) {
             localStorage.removeItem('dailyLogTeknisi');
             logData = [];
             tampilkanLog();
         }
     }
+
+    async function jalankanSync() {
+        if (!navigator.onLine) return;
+
+        let antrean = JSON.parse(localStorage.getItem('antreanLog')) || [];
+        if (antrean.length === 0) return; 
+
+        const btnSimpan = document.getElementById('btnSimpan');
+        let teksAsli = btnSimpan.innerHTML;
+        btnSimpan.innerHTML = `<i class="fa-solid fa-rotate fa-spin"></i> SYNC ${antrean.length} DATA...`;
+        btnSimpan.disabled = true;
+
+        let antreanGagal = []; 
+
+        for (let i = 0; i < antrean.length; i++) {
+            try {
+                await fetch(scriptURL, {
+                    method: 'POST',
+                    body: JSON.stringify(antrean[i]),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                });
+            } catch (error) {
+                antreanGagal.push(antrean[i]);
+            }
+        }
+
+        localStorage.setItem('antreanLog', JSON.stringify(antreanGagal));
+        
+        btnSimpan.innerHTML = teksAsli;
+        btnSimpan.disabled = false;
+        
+        if(antreanGagal.length > 0) {
+            console.log("Beberapa data masih tertunda.");
+        }
+    }
+
+    window.addEventListener('online', jalankanSync);
 </script>
 
 </body>
