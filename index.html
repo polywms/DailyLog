@@ -567,6 +567,19 @@
     }
 
     window.addEventListener('online', jalankanSync);
+
+    // Registrasi Service Worker untuk Mode Offline PWA
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(registration => {
+                    console.log('ServiceWorker sukses terdaftar dengan scope: ', registration.scope);
+                })
+                .catch(err => {
+                    console.log('ServiceWorker gagal terdaftar: ', err);
+                });
+        });
+    }
 </script>
 
 </body>
