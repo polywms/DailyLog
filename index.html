@@ -464,25 +464,38 @@
             prosesSimpan("Tanpa GPS");
         }
 
-        function prosesSimpan(gps) {
+        const scriptURL = 'https://script.google.com/macros/s/AKfycbz26Ut7tFVm-22vNbAGnzSLMe9sak8_usjrwHT5AUoUL6NpnpghfdAEg1D7q0ECvGQg0Q/exec';
+
+        async function prosesSimpan(gps) {
             const actualSubmitDate = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            
             const dataBaru = { nama, tanggal: actualSubmitDate, jamMulai, jamSelesai, tipe, namaKlien, alamatKlien, detail, kendala, gps };
 
-            logData.push(dataBaru);
-            localStorage.setItem('dailyLogTeknisi', JSON.stringify(logData));
-            
-            document.getElementById('jamMulai').value = '';
-            document.getElementById('jamSelesai').value = '';
-            document.getElementById('namaCustomer').value = '';
-            document.getElementById('alamatCustomer').value = '';
-            document.getElementById('detail').value = '';
-            document.getElementById('kendala').value = ''; 
-            
-            btnSimpan.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> SIMPAN PEKERJAAN';
-            btnSimpan.disabled = false;
-            
-            tampilkanLog();
+            try {
+                await fetch(scriptURL, {
+                    method: 'POST',
+                    body: JSON.stringify(dataBaru),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                });
+
+                logData.push(dataBaru);
+                localStorage.setItem('dailyLogTeknisi', JSON.stringify(logData));
+                
+                document.getElementById('jamMulai').value = '';
+                document.getElementById('jamSelesai').value = '';
+                document.getElementById('namaCustomer').value = '';
+                document.getElementById('alamatCustomer').value = '';
+                document.getElementById('detail').value = '';
+                document.getElementById('kendala').value = ''; 
+                
+                btnSimpan.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> SIMPAN PEKERJAAN';
+                btnSimpan.disabled = false;
+                
+                tampilkanLog();
+            } catch (error) {
+                alert('Gagal mengirim data ke server. Cek koneksi internet Anda.');
+                btnSimpan.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> SIMPAN PEKERJAAN';
+                btnSimpan.disabled = false;
+            }
         }
     }
 
