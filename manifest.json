@@ -1,6 +1,6 @@
 {
   "name": "Catatan Harian Teknisi",
-  "short_name": "Artemis Log",
+  "short_name": "Teknisi Log",
   "start_url": "index.html",
   "display": "standalone",
   "background_color": "#f8f9fa",
