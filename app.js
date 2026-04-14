@@ -372,6 +372,24 @@ async function jalankanSync() {
 
 window.addEventListener('online', jalankanSync);
 
-if ('serviceWorker' in navigator) { 
-    window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW Error: ', err))); 
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        // Tambahkan query string ?v= agar browser mengecek file sw.js yang paling baru di GitHub
+        navigator.serviceWorker.register('./sw.js?v=' + new Date().getTime())
+            .then(reg => {
+                // Paksa pengecekan update setiap kali aplikasi dibuka
+                reg.update();
+                console.log('SW terdaftar');
+            })
+            .catch(err => console.log('SW Error: ', err));
+    });
+
+
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+            window.location.reload();
+            refreshing = true;
+        }
+    });
 }
