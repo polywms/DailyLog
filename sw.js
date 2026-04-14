@@ -1,5 +1,5 @@
 // UBAH NAMA INI SETIAP KALI ADA UPDATE FITUR BARU!
-const CACHE_NAME = 'artemis-log-v7'; 
+const CACHE_NAME = 'artemis-log-v8'; 
 
 const urlsToCache = [
     './',
@@ -10,47 +10,53 @@ const urlsToCache = [
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
 ];
 
-// 1. Proses Install
+// 1. Proses Install: Menyimpan aset awal ke cache
 self.addEventListener('install', event => {
-    // BARIS SAKTI 1: Paksa Service Worker baru untuk langsung menendang yang lama
-    self.skipWaiting(); 
-    
+    self.skipWaiting(); // Paksa SW baru langsung aktif
     event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then(cache => {
-                return cache.addAll(urlsToCache);
-            })
+        caches.open(CACHE_NAME).then(cache => {
+            return cache.addAll(urlsToCache);
+        })
     );
 });
 
-// 2. Proses Aktivasi & Bersih-bersih
+// 2. Proses Aktivasi: Membersihkan cache lama
 self.addEventListener('activate', event => {
     event.waitUntil(
         caches.keys().then(cacheNames => {
             return Promise.all(
                 cacheNames.map(cacheName => {
-                    // Jika ada cache dengan nama versi lama, HAPUS!
                     if (cacheName !== CACHE_NAME) {
-                        console.log('Menghapus cache versi lama:', cacheName);
+                        console.log('Menghapus cache lama:', cacheName);
                         return caches.delete(cacheName);
                     }
                 })
             );
         })
     );
-    // BARIS SAKTI 2: Paksa halaman yang sedang terbuka untuk langsung pakai versi terbaru
-    self.clients.claim(); 
+    self.clients.claim(); // Ambil kendali halaman segera
 });
 
-// 3. Proses Ambil Data (Fetch)
+// 3. Proses Ambil Data: Strategi NETWORK-FIRST
 self.addEventListener('fetch', event => {
-    if (event.request.url.includes('script.google.com')) {
-        return;
-    }
+    // Jangan cache request ke Google Script (API)
+    if (event.request.url.includes('script.google.com')) return;
+
     event.respondWith(
-        caches.match(event.request)
+        fetch(event.request)
             .then(response => {
-                return response || fetch(event.request);
+                // Jika sukses ambil dari internet, perbarui cache dengan file terbaru ini
+                if (response && response.status === 200) {
+                    let responseClone = response.clone();
+                    caches.open(CACHE_NAME).then(cache => {
+                        cache.put(event.request, responseClone);
+                    });
+                }
+                return response;
+            })
+            .catch(() => {
+                // Jika internet mati (OFFLINE), ambil dari Cache
+                return caches.match(event.request);
             })
     );
 });
