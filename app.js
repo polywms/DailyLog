@@ -8,6 +8,7 @@ document.getElementById('tanggal').value = today.toLocaleDateString('id-ID', { d
 
 let logData = JSON.parse(localStorage.getItem('dailyLogTeknisi')) || [];
 let currentState = 'BERANGKAT', aktifWaktuBerangkat = '', aktifWaktuSampai = '', aktifNamaKlien = '', aktifAlamatKlien = '';
+let isSyncing = false;
 
 window.onload = function() {
     tampilkanLog();
@@ -20,6 +21,11 @@ window.onload = function() {
     cekModalNamaHarian();
     pulihkanStateTiket(); 
     jalankanSync();
+    
+    // Pengecekan otomatis setiap 10 detik
+    setInterval(() => {
+        jalankanSync();
+    }, 10000);
 }
 
 // ==============================================
@@ -31,7 +37,6 @@ function switchTab(tabId) {
     document.getElementById(`tab-${tabId}`).classList.add('active');
     document.getElementById(`btn-${tabId}`).classList.add('active');
 
-    // Otomatis tarik nama teknisi jika buka tab "Pantau Tim" dan data belum ada
     if (tabId === 'tim') {
         const select = document.getElementById('pilihTeknisiTim');
         if (select.options.length <= 1) muatDaftarTeknisi();
@@ -317,30 +322,41 @@ function hapusSemua() { if(confirm('Yakin mereset seluruh log?')) { localStorage
 // AUTO SYNC & SERVICE WORKER
 // ==============================================
 async function jalankanSync() {
-    if (!navigator.onLine) return;
-    let antrean = JSON.parse(localStorage.getItem('antreanLog')) || [];
-    if (antrean.length === 0) return; 
-
+    if (!navigator.onLine || isSyncing) return;
+    
+    isSyncing = true;
     const btnTabHarian = document.getElementById('btn-harian');
-    btnTabHarian.innerHTML = `<i class="fa-solid fa-rotate fa-spin"></i> Sync...`;
 
-    let antreanGagal = []; 
-    for (let i = 0; i < antrean.length; i++) {
-        try {
-            let payload = antrean[i];
+    try {
+        while (true) {
+            let antrean = JSON.parse(localStorage.getItem('antreanLog')) || [];
+            if (antrean.length === 0) break;
+
+            btnTabHarian.innerHTML = `<i class="fa-solid fa-rotate fa-spin"></i> Sync...`;
+            let payload = antrean[0];
             if (!payload.action) payload.action = "simpan";
 
-            const respon = await fetch(scriptURL, {
-                method: 'POST',
-                body: JSON.stringify(payload),
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' }
-            });
-            const resJson = await respon.json();
-            if(resJson.status === 'error') console.error("Ditolak Server: ", resJson.message);
-        } catch (error) { antreanGagal.push(antrean[i]); }
+            try {
+                const respon = await fetch(scriptURL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                });
+                const resJson = await respon.json();
+                
+                if (resJson.status === 'success' || resJson.status === 'error') {
+                    let antreanUpdate = JSON.parse(localStorage.getItem('antreanLog')) || [];
+                    antreanUpdate.shift(); 
+                    localStorage.setItem('antreanLog', JSON.stringify(antreanUpdate));
+                }
+            } catch (error) {
+                break;
+            }
+        }
+    } finally {
+        btnTabHarian.innerHTML = `<i class="fa-solid fa-list-check"></i> Harian`;
+        isSyncing = false;
     }
-    localStorage.setItem('antreanLog', JSON.stringify(antreanGagal));
-    btnTabHarian.innerHTML = `<i class="fa-solid fa-list-check"></i> Harian`;
 }
 
 window.addEventListener('online', jalankanSync);
