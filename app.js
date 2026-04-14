@@ -324,10 +324,18 @@ function hapusSemua() { if(confirm('Yakin mereset seluruh log?')) { localStorage
 async function jalankanSync() {
     if (!navigator.onLine || isSyncing) return;
     
+    // Cek dulu apakah ada antrean sebelum menampilkan modal
+    let antreanCek = JSON.parse(localStorage.getItem('antreanLog')) || [];
+    if (antreanCek.length === 0) return; 
+    
     isSyncing = true;
     const btnTabHarian = document.getElementById('btn-harian');
+    const modalSync = document.getElementById('modalSync');
 
     try {
+        // TAMPILKAN MODAL BLOKIR LAYAR
+        if (modalSync) modalSync.style.display = 'flex';
+
         while (true) {
             let antrean = JSON.parse(localStorage.getItem('antreanLog')) || [];
             if (antrean.length === 0) break;
@@ -350,12 +358,15 @@ async function jalankanSync() {
                     localStorage.setItem('antreanLog', JSON.stringify(antreanUpdate));
                 }
             } catch (error) {
+                // Jika internet putus di tengah jalan, keluar dari perulangan
                 break;
             }
         }
     } finally {
         btnTabHarian.innerHTML = `<i class="fa-solid fa-list-check"></i> Harian`;
         isSyncing = false;
+
+        if (modalSync) modalSync.style.display = 'none';
     }
 }
 
