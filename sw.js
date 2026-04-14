@@ -1,5 +1,5 @@
 // UBAH NAMA INI SETIAP KALI ADA UPDATE FITUR BARU!
-const CACHE_NAME = 'artemis-log-v6'; 
+const CACHE_NAME = 'artemis-log-v7'; 
 
 const urlsToCache = [
     './',
