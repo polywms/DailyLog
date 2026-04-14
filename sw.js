@@ -1,4 +1,4 @@
-const CACHE_NAME = 'artemis-log-v3';
+const CACHE_NAME = 'artemis-log-v4';
 const urlsToCache = [
     './',
     './index.html',
