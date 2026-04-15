@@ -19,6 +19,11 @@ let isSyncing = false;
 
 window.onload = function() {
     document.getElementById('tanggal').value = formatTanggalUI;
+
+    if (localStorage.getItem('logSettingTema') === 'dark') {
+        document.body.classList.add('dark-mode');
+        updateBtnTemaUI(true);
+    }
     
     tampilkanLog();
     const savedName = localStorage.getItem('logSettingNama');
@@ -42,9 +47,37 @@ function switchTab(tabId) {
     document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
     document.getElementById(`tab-${tabId}`).classList.add('active');
     document.getElementById(`btn-${tabId}`).classList.add('active');
+    
     if (tabId === 'tim') {
         const select = document.getElementById('pilihTeknisiTim');
         if (select.options.length <= 1) muatDaftarTeknisi();
+    }
+    
+    if (tabId === 'dashboard') {
+        muatDashboardStats();
+    }
+}
+
+async function muatDashboardStats() {
+    const namaTeknisi = localStorage.getItem('logSettingNama');
+    if (!namaTeknisi) return;
+    if (!navigator.onLine) return; // Jika offline biarkan nilai dummy / angka lama
+
+    try {
+        const respon = await fetch(scriptURL, { 
+            method: 'POST', 
+            body: JSON.stringify({ action: "get_dashboard_stats", nama: namaTeknisi }), 
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' } 
+        });
+        const resJson = await respon.json();
+        
+        if (resJson.status === 'success') {
+            document.querySelectorAll('.dash-card .val')[0].innerText = resJson.data.tugasSelesai;
+            document.querySelectorAll('.dash-card .val')[1].innerText = resJson.data.totalKendala;
+            document.querySelector('.dash-card p[style*="font-size: 14px"]').innerText = resJson.data.areaTerbanyak;
+        }
+    } catch (err) {
+        console.log("Gagal memuat dashboard", err);
     }
 }
 
@@ -145,6 +178,26 @@ function konfirmasiModalBulanan() {
 // PENGATURAN MODE
 // ==============================================
 function simpanNama() { localStorage.setItem('logSettingNama', document.getElementById('nama').value); }
+
+function toggleTema() {
+    const isDark = document.body.classList.toggle('dark-mode');
+    localStorage.setItem('logSettingTema', isDark ? 'dark' : 'light');
+    updateBtnTemaUI(isDark);
+}
+
+function updateBtnTemaUI(isDark) {
+    const btn = document.getElementById('btnToggleTema');
+    if (btn) {
+        if (isDark) {
+            btn.innerHTML = '<i class="fa-solid fa-sun"></i> Mode Terang';
+            btn.style.borderColor = 'var(--text-muted)';
+        } else {
+            btn.innerHTML = '<i class="fa-solid fa-moon"></i> Mode Gelap';
+            btn.style.borderColor = 'var(--border)';
+        }
+    }
+}
+
 function gantiMode(elemen) {
     const tipeLama = localStorage.getItem('logSettingTipe') || 'Kunjungan', tipeBaru = elemen.value;
     if (tipeLama !== tipeBaru) {
@@ -209,8 +262,24 @@ function kirimDataParsial(aksi) {
 function simpanStateTiket() { localStorage.setItem('tiketTugasAktif', JSON.stringify({ state: currentState, taskId: aktifTaskId, waktuBerangkat: aktifWaktuBerangkat, waktuSampai: aktifWaktuSampai, namaKlien: aktifNamaKlien, alamatKlien: aktifAlamatKlien })); renderUIBerdasarkanState(); }
 function pulihkanStateTiket() { const t = JSON.parse(localStorage.getItem('tiketTugasAktif')); if (t) { currentState = t.state; aktifTaskId = t.taskId || ''; aktifWaktuBerangkat = t.waktuBerangkat; aktifWaktuSampai = t.waktuSampai; aktifNamaKlien = t.namaKlien; aktifAlamatKlien = t.alamatKlien; renderUIBerdasarkanState(); } }
 function batalTiket() {
-    if(confirm('Batalkan tugas ini? Data di server kantor mungkin sudah tercatat sebagian.')) {
-        localStorage.removeItem('tiketTugasAktif'); currentState = 'BERANGKAT'; aktifTaskId = aktifWaktuBerangkat = aktifWaktuSampai = aktifNamaKlien = aktifAlamatKlien = '';
+    if(confirm('Batalkan tugas ini? Data di server akan ikut dihapus permanen.')) {
+        
+        // --- TAMBAHAN BARU: Perintah hapus baris di Spreadsheet ---
+        if (aktifTaskId !== '') {
+            let antrean = JSON.parse(localStorage.getItem('antreanLog')) || [];
+            antrean.push({
+                action: "delete_task",
+                taskId: aktifTaskId,
+                nama: localStorage.getItem('logSettingNama')
+            });
+            localStorage.setItem('antreanLog', JSON.stringify(antrean));
+            jalankanSync(); // Eksekusi penghapusan di background
+        }
+        // -----------------------------------------------------------
+
+        localStorage.removeItem('tiketTugasAktif'); 
+        currentState = 'BERANGKAT'; 
+        aktifTaskId = aktifWaktuBerangkat = aktifWaktuSampai = aktifNamaKlien = aktifAlamatKlien = '';
         document.getElementById('namaCustomer').value = document.getElementById('alamatCustomer').value = document.getElementById('detailKunjungan').value = document.getElementById('kendalaKunjungan').value = '';
         renderUIBerdasarkanState();
     }

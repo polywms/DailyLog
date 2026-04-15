@@ -1,222 +1,224 @@
 <!DOCTYPE html>
 <html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Daily Log Teknisi</title>
-
-    <link rel="icon" type="image/png" sizes="192x192" href="icon.png">
-    <link rel="icon" type="image/png" sizes="512x512" href="icon.png">
-    <link rel="apple-touch-icon" href="icon.png">
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#d92534">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Artemis Log">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="style.css">
-
-</head>
-<body>
-
-<div id="modalSync" class="modal-overlay" style="z-index: 4000;">
-    <div class="modal-content" style="text-align: center; background: transparent; box-shadow: none; border: none; padding: 0;">
-        <div style="background: var(--surface); padding: 30px; border-radius: 12px; display: inline-block; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
-            <i class="fa-solid fa-cloud-arrow-up fa-bounce" style="font-size: 45px; color: var(--primary); margin-bottom: 15px;"></i>
-            <h3 style="margin: 0 0 10px 0; border: none; color: var(--text-main);">Mengirim Data...</h3>
-            <p style="margin: 0; font-size: 13px; color: var(--text-muted); font-weight: 600;">Jangan tutup aplikasi.</p>
-        </div>
-    </div>
-</div>
-
-<div id="modalNamaHarian" class="modal-overlay">
-    <div class="modal-content" style="text-align: center;">
-        <div id="kontenBelumAdaNama" style="display: none;">
-            <i class="fa-solid fa-user-shield" style="font-size: 45px; color: var(--primary); margin-bottom: 15px;"></i>
-            <h3 style="margin-top:0; border-bottom: none; color: var(--text-main);">Selamat Datang!</h3>
-            <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 25px;">Silakan atur Identitas / Nama Anda sebelum mulai bekerja.</p>
-            <button class="btn-primary" onclick="tutorBukaIdentitas()" style="margin-top: 0;"><i class="fa-solid fa-gear"></i> Buka Pengaturan</button>
-        </div>
-        <div id="kontenKonfirmasiNama" style="display: none;">
-            <i class="fa-solid fa-circle-user" style="font-size: 45px; color: var(--primary); margin-bottom: 15px;"></i>
-            <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 5px; font-weight: 600;">Catatan Harian Untuk Teknisi :</p>
-            <h2 id="teksNamaTeknisi" style="margin: 0 0 25px 0; color: var(--primary); font-size: 22px;">NAMA</h2>
-            <button class="btn-primary" onclick="konfirmasiNamaSiap()" style="margin-top: 0;"><i class="fa-solid fa-check-circle"></i> Ya, Siap Kerja</button>
-            <button class="btn-outline-primary" onclick="tutorBukaIdentitas()">Bukan, ganti teknisi</button>
-        </div>
-    </div>
-</div>
-
-<div id="modalBulanan" class="modal-overlay">
-    <div class="modal-content">
-        <h3 style="margin-top:0; border-bottom: none; padding-bottom: 0; font-size: 18px; color: var(--primary);"><i class="fa-regular fa-calendar-check"></i> Tugas Bulan Ini</h3>
-        <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.5;">Silakan pilih mode penugasan Anda untuk bulan ini:</p>
-        <div class="radio-toggle" style="margin-bottom: 20px;">
-            <input type="radio" id="modalModeLapangan" name="modalTipe" value="Kunjungan" checked>
-            <label for="modalModeLapangan">Kunjungan</label>
-            <input type="radio" id="modalModeCS" name="modalTipe" value="Tugas Internal / CS">
-            <label for="modalModeCS">Indoor / CS</label>
-        </div>
-        <button class="btn-primary" onclick="konfirmasiModalBulanan()" style="margin-top: 0;"><i class="fa-solid fa-check"></i> OK, SIMPAN</button>
-    </div>
-</div>
-
-<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
-<div class="sidebar" id="sidebarMenu">
-    <div class="sidebar-header">
-        <h3><i class="fa-solid fa-gear"></i> Pengaturan</h3>
-        <button class="btn-close-sidebar" onclick="toggleSidebar()"><i class="fa-solid fa-xmark"></i></button>
-    </div>
-    <div class="sidebar-content">
-        <label>Nama Teknisi</label>
-        <input type="text" id="nama" placeholder="Nama Anda..." oninput="simpanNama()">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <title>Daily Log Teknisi</title>
         
-        <label>Tanggal</label>
-        <input type="text" id="tanggal" readonly style="color: var(--text-muted); background: #f8f9fa;">
+        <link rel="icon" type="image/png" sizes="192x192" href="icon.png">
+        <link rel="icon" type="image/png" sizes="512x512" href="icon.png">
+        <link rel="apple-touch-icon" href="icon.png">
+        <link rel="manifest" href="manifest.json">
+        <meta name="theme-color" content="#d92534">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title" content="Artemis Log">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+        <link rel="stylesheet" href="style.css">
         
-        <div style="margin-top: 25px; border-top: 1px dashed var(--border); padding-top: 15px;">
-            <label>Mode Penugasan</label>
-            <div class="radio-toggle">
-                <input type="radio" id="modeLapangan" name="tipe" value="Kunjungan" onchange="gantiMode(this)">
-                <label for="modeLapangan">Kunjungan</label>
-                <input type="radio" id="modeCS" name="tipe" value="Tugas Internal / CS" onchange="gantiMode(this)">
-                <label for="modeCS">Internal</label>
-            </div>
-        </div>
-
-        <div style="margin-top: 25px; border-top: 1px dashed var(--border); padding-top: 15px;">
-            <label>Tema Tampilan (Soon)</label>
-            <button class="btn-outline" style="margin-top:0;" disabled><i class="fa-solid fa-moon"></i> Mode Gelap (Off)</button>
-        </div>
-    </div>
-</div>
-
-<div class="app-container">
-    <div class="app-header">
-        <div class="header-title">
-            <i class="fa-solid fa-crosshairs"></i>
-            <h1>Artemis Log</h1>
-        </div>
-        <button class="btn-menu" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
-    </div>
-
-    <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('harian')" id="btn-harian"><i class="fa-solid fa-list-check"></i> <span>Harian</span></button>
-        <button class="tab-btn" onclick="switchTab('dashboard')" id="btn-dashboard"><i class="fa-solid fa-chart-pie"></i> <span>Dashboard</span></button>
-        <button class="tab-btn" onclick="switchTab('tim')" id="btn-tim"><i class="fa-solid fa-users"></i> <span>Tim</span></button>
-    </div>
-
-    <div id="tab-harian" class="content active">
-        <div id="areaKunjungan">
-            <div id="tiketPerjalanan">
-                <h4><i class="fa-solid fa-map-location-dot"></i> Tugas Aktif</h4>
-                <p id="tiketInfoArea">Menuju: <strong>-</strong><br>Lokasi: -</p>
-                <div class="tiket-waktu">
-                    <div>Berangkat <span id="tiketWaktuBerangkat">--:--</span></div>
-                    <div><i class="fa-solid fa-arrow-right" style="color: #dee2e6; margin-top: 10px;"></i></div>
-                    <div>Tiba/Mulai <span id="tiketWaktuSampai" style="color: #adb5bd;">--:--</span></div>
+    </head>
+    <body>
+        
+        <div id="modalSync" class="modal-overlay" style="z-index: 4000;">
+            <div class="modal-content" style="text-align: center; background: transparent; box-shadow: none; border: none; padding: 0;">
+                <div style="background: var(--surface); padding: 30px; border-radius: 12px; display: inline-block; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+                    <i class="fa-solid fa-cloud-arrow-up fa-bounce" style="font-size: 45px; color: var(--primary); margin-bottom: 15px;"></i>
+                    <h3 style="margin: 0 0 10px 0; border: none; color: var(--text-main);">Mengirim Data...</h3>
+                    <p style="margin: 0; font-size: 13px; color: var(--text-muted); font-weight: 600;">Jangan tutup aplikasi.</p>
                 </div>
-                <button class="btn-outline btn-danger" style="padding: 8px; font-size: 11px; margin-top: 15px;" onclick="batalTiket()"><i class="fa-solid fa-xmark"></i> Batal / Reset Tugas Ini</button>
             </div>
-            <div id="formCustomerArea">
+        </div>
+        
+        <div id="modalNamaHarian" class="modal-overlay">
+            <div class="modal-content" style="text-align: center;">
+                <div id="kontenBelumAdaNama" style="display: none;">
+                    <i class="fa-solid fa-user-shield" style="font-size: 45px; color: var(--primary); margin-bottom: 15px;"></i>
+                    <h3 style="margin-top:0; border-bottom: none; color: var(--text-main);">Selamat Datang!</h3>
+                    <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 25px;">Silakan atur Identitas / Nama Anda sebelum mulai bekerja.</p>
+                    <button class="btn-primary" onclick="tutorBukaIdentitas()" style="margin-top: 0;"><i class="fa-solid fa-gear"></i> Buka Pengaturan</button>
+                </div>
+                <div id="kontenKonfirmasiNama" style="display: none;">
+                    <i class="fa-solid fa-circle-user" style="font-size: 45px; color: var(--primary); margin-bottom: 15px;"></i>
+                    <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 5px; font-weight: 600;">Catatan Harian Untuk Teknisi :</p>
+                    <h2 id="teksNamaTeknisi" style="margin: 0 0 25px 0; color: var(--primary); font-size: 22px;">NAMA</h2>
+                    <button class="btn-primary" onclick="konfirmasiNamaSiap()" style="margin-top: 0;"><i class="fa-solid fa-check-circle"></i> Ya, Siap Kerja</button>
+                    <button class="btn-outline-primary" onclick="tutorBukaIdentitas()">Bukan, ganti teknisi</button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="modalBulanan" class="modal-overlay">
+            <div class="modal-content">
+                <h3 style="margin-top:0; border-bottom: none; padding-bottom: 0; font-size: 18px; color: var(--primary);"><i class="fa-regular fa-calendar-check"></i> Tugas Bulan Ini</h3>
+                <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.5;">Silakan pilih mode penugasan Anda untuk bulan ini:</p>
+                <div class="radio-toggle" style="margin-bottom: 20px;">
+                    <input type="radio" id="modalModeLapangan" name="modalTipe" value="Kunjungan" checked>
+                    <label for="modalModeLapangan">Kunjungan</label>
+                    <input type="radio" id="modalModeCS" name="modalTipe" value="Tugas Internal / CS">
+                    <label for="modalModeCS">Indoor / CS</label>
+                </div>
+                <button class="btn-primary" onclick="konfirmasiModalBulanan()" style="margin-top: 0;"><i class="fa-solid fa-check"></i> OK, SIMPAN</button>
+            </div>
+        </div>
+        
+        <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+        <div class="sidebar" id="sidebarMenu">
+            <div class="sidebar-header">
+                <h3><i class="fa-solid fa-gear"></i> Pengaturan</h3>
+                <button class="btn-close-sidebar" onclick="toggleSidebar()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="sidebar-content">
+                <label>Nama Teknisi</label>
+                <input type="text" id="nama" placeholder="Nama Anda..." oninput="simpanNama()">
+                
+                <label>Tanggal</label>
+                <input type="text" id="tanggal" readonly style="color: var(--text-muted); background: #f8f9fa;">
+                
+                <div style="margin-top: 25px; border-top: 1px dashed var(--border); padding-top: 15px;">
+                    <label>Mode Penugasan</label>
+                    <div class="radio-toggle">
+                        <input type="radio" id="modeLapangan" name="tipe" value="Kunjungan" onchange="gantiMode(this)">
+                        <label for="modeLapangan">Kunjungan</label>
+                        <input type="radio" id="modeCS" name="tipe" value="Tugas Internal / CS" onchange="gantiMode(this)">
+                        <label for="modeCS">Internal</label>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 25px; border-top: 1px dashed var(--border); padding-top: 15px;">
+                    <label>Tema Tampilan</label>
+                    <button class="btn-outline" id="btnToggleTema" onclick="toggleTema()" style="margin-top:0;">
+                        <i class="fa-solid fa-moon"></i> Mode Gelap
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="app-container">
+            <div class="app-header">
+                <div class="header-title">
+                    <i class="fa-solid fa-crosshairs"></i>
+                    <h1>Artemis Log</h1>
+                </div>
+                <button class="btn-menu" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+            </div>
+            
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('harian')" id="btn-harian"><i class="fa-solid fa-list-check"></i> <span>Harian</span></button>
+                <button class="tab-btn" onclick="switchTab('dashboard')" id="btn-dashboard"><i class="fa-solid fa-chart-pie"></i> <span>Dashboard</span></button>
+                <button class="tab-btn" onclick="switchTab('tim')" id="btn-tim"><i class="fa-solid fa-users"></i> <span>Tim</span></button>
+            </div>
+            
+            <div id="tab-harian" class="content active">
+                <div id="areaKunjungan">
+                    <div id="tiketPerjalanan">
+                        <h4><i class="fa-solid fa-map-location-dot"></i> Tugas Aktif</h4>
+                        <p id="tiketInfoArea">Menuju: <strong>-</strong><br>Lokasi: -</p>
+                        <div class="tiket-waktu">
+                            <div>Berangkat <span id="tiketWaktuBerangkat">--:--</span></div>
+                            <div><i class="fa-solid fa-arrow-right" style="color: #dee2e6; margin-top: 10px;"></i></div>
+                            <div>Tiba/Mulai <span id="tiketWaktuSampai" style="color: #adb5bd;">--:--</span></div>
+                        </div>
+                        <button class="btn-outline btn-danger" style="padding: 8px; font-size: 11px; margin-top: 15px;" onclick="batalTiket()"><i class="fa-solid fa-xmark"></i> Batal / Reset Tugas Ini</button>
+                    </div>
+                    <div id="formCustomerArea">
+                        <div class="grid-2">
+                            <div><label>Nama Customer</label><input type="text" id="namaCustomer" placeholder="Nama Toko/Orang"></div>
+                            <div><label>Area / Alamat</label><input type="text" id="alamatCustomer" placeholder="Misal: Bandongan"></div>
+                        </div>
+                    </div>
+                    <div id="formDetailArea" style="display: none;">
+                        <label>Detail Pekerjaan [Wajib isi]</label>
+                        <textarea id="detailKunjungan" placeholder="Jelaskan apa saja yang dikerjakan... Tulis 'Lancar' kalau tidak ada masalah"></textarea>
+                        <label>Kendala [Kosongkan jika lancar]</label>
+                        <input type="text" id="kendalaKunjungan" placeholder="Misal: WIP COMP, Alamat Tdk Ketemu">
+                    </div>
+                    <div class="slider-container state-berangkat" id="actionSlider">
+                        <div class="slider-text" id="sliderText">Geser Mulai Perjalanan &gt;&gt;</div>
+                        <div class="slider-bg" id="sliderBg"></div>
+                        <div class="slider-thumb" id="sliderThumb"><i class="fa-solid fa-motorcycle"></i></div>
+                    </div>
+                </div>
+                
+                <div id="areaInternalKlasik" style="display: none;">
+                    <label>Jenis Tugas</label>
+                    <select id="jenisTugasInternal">
+                        <option value="Mengerjakan Unit Masuk">Mengerjakan Unit Masuk</option>
+                        <option value="Edukasi Customer">Edukasi Customer</option>
+                        <option value="Lainnya">Lainnya</option>
+                    </select>
+                    <div class="grid-2">
+                        <div>
+                            <label>Jam Mulai</label>
+                            <div class="time-wrapper">
+                                <input type="time" id="jamMulaiInternal">
+                                <button class="btn-time" onclick="setWaktuSekarang('jamMulaiInternal')"><i class="fa-solid fa-clock"></i>Now</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label>Jam Selesai</label>
+                            <div class="time-wrapper">
+                                <input type="time" id="jamSelesaiInternal">
+                                <button class="btn-time" onclick="setWaktuSekarang('jamSelesaiInternal')"><i class="fa-solid fa-clock"></i>Now</button>
+                            </div>
+                        </div>
+                    </div>
+                    <label>Detail Pekerjaan [Wajib isi]</label>
+                    <textarea id="detailInternal" placeholder="Jelaskan apa saja yang dikerjakan..."></textarea>
+                    <label>Kendala [Kosongkan jika lancar]</label>
+                    <input type="text" id="kendalaInternal" placeholder="Misal: WIP COMP">
+                    <button class="btn-primary" onclick="simpanDataInternal()" id="btnSimpanInternal"><i class="fa-solid fa-floppy-disk"></i> SIMPAN TUGAS INTERNAL</button>
+                </div>
+                
+                <ul class="timeline" id="listLog"></ul>
+                <div style="margin-top: 15px;" id="exportArea">
+                    <button class="btn-outline btn-danger" onclick="hapusSemua()"><i class="fa-solid fa-trash-can"></i> Hapus Semua Data Hari Ini</button>
+                </div>
+            </div>
+            
+            <div id="tab-dashboard" class="content">
+                <h3>Ringkasan Kinerja (Dummy)</h3>
+                <p style="font-size: 13px; color: var(--text-muted); margin-top: -5px; margin-bottom: 20px;">
+                    Statistik data pengerjaan mingguan kamu akan muncul di sini. (Dalam proses pengerjaan).
+                </p>
+                
                 <div class="grid-2">
-                    <div><label>Nama Customer</label><input type="text" id="namaCustomer" placeholder="Nama Toko/Orang"></div>
-                    <div><label>Area / Alamat</label><input type="text" id="alamatCustomer" placeholder="Misal: Bandongan"></div>
-                </div>
-            </div>
-            <div id="formDetailArea" style="display: none;">
-                <label>Detail Pekerjaan [Wajib isi]</label>
-                <textarea id="detailKunjungan" placeholder="Jelaskan apa saja yang dikerjakan... Tulis 'Lancar' kalau tidak ada masalah"></textarea>
-                <label>Kendala [Kosongkan jika lancar]</label>
-                <input type="text" id="kendalaKunjungan" placeholder="Misal: WIP COMP, Alamat Tdk Ketemu">
-            </div>
-            <div class="slider-container state-berangkat" id="actionSlider">
-                <div class="slider-text" id="sliderText">Geser Mulai Perjalanan &gt;&gt;</div>
-                <div class="slider-bg" id="sliderBg"></div>
-                <div class="slider-thumb" id="sliderThumb"><i class="fa-solid fa-motorcycle"></i></div>
-            </div>
-        </div>
-
-        <div id="areaInternalKlasik" style="display: none;">
-            <label>Jenis Tugas</label>
-            <select id="jenisTugasInternal">
-                <option value="Mengerjakan Unit Masuk">Mengerjakan Unit Masuk</option>
-                <option value="Edukasi Customer">Edukasi Customer</option>
-                <option value="Lainnya">Lainnya</option>
-            </select>
-            <div class="grid-2">
-                <div>
-                    <label>Jam Mulai</label>
-                    <div class="time-wrapper">
-                        <input type="time" id="jamMulaiInternal">
-                        <button class="btn-time" onclick="setWaktuSekarang('jamMulaiInternal')"><i class="fa-solid fa-clock"></i>Now</button>
+                    <div class="dash-card">
+                        <h4>Tugas Selesai</h4>
+                        <p class="val">0</p>
+                    </div>
+                    <div class="dash-card">
+                        <h4>Kendala</h4>
+                        <p class="val" style="color: #f59f00;">0</p>
                     </div>
                 </div>
-                <div>
-                    <label>Jam Selesai</label>
-                    <div class="time-wrapper">
-                        <input type="time" id="jamSelesaiInternal">
-                        <button class="btn-time" onclick="setWaktuSekarang('jamSelesaiInternal')"><i class="fa-solid fa-clock"></i>Now</button>
-                    </div>
+                
+                <div class="dash-card" style="text-align: left;">
+                    <h4>Area Terbanyak Minggu Ini</h4>
+                    <p style="font-size: 14px; font-weight: 600; margin: 10px 0 0 0; color: var(--text-main);">- Belum ada data -</p>
                 </div>
             </div>
-            <label>Detail Pekerjaan [Wajib isi]</label>
-            <textarea id="detailInternal" placeholder="Jelaskan apa saja yang dikerjakan..."></textarea>
-            <label>Kendala [Kosongkan jika lancar]</label>
-            <input type="text" id="kendalaInternal" placeholder="Misal: WIP COMP">
-            <button class="btn-primary" onclick="simpanDataInternal()" id="btnSimpanInternal"><i class="fa-solid fa-floppy-disk"></i> SIMPAN TUGAS INTERNAL</button>
-        </div>
-
-        <ul class="timeline" id="listLog"></ul>
-        <div style="margin-top: 15px;" id="exportArea">
-            <button class="btn-outline btn-danger" onclick="hapusSemua()"><i class="fa-solid fa-trash-can"></i> Hapus Semua Data Hari Ini</button>
-        </div>
-    </div>
-
-    <div id="tab-dashboard" class="content">
-        <h3>Ringkasan Kinerja (Dummy)</h3>
-        <p style="font-size: 13px; color: var(--text-muted); margin-top: -5px; margin-bottom: 20px;">
-            Statistik data pengerjaan mingguan kamu akan muncul di sini. (Dalam proses pengerjaan).
-        </p>
-
-        <div class="grid-2">
-            <div class="dash-card">
-                <h4>Tugas Selesai</h4>
-                <p class="val">0</p>
+            
+            <div id="tab-tim" class="content">
+                <h3>Aktivitas Rekan Tim</h3>
+                <p style="font-size: 13px; color: var(--text-muted); margin-top: -5px; margin-bottom: 20px;">
+                    Pilih nama teknisi untuk melihat aktivitas mereka hari ini.
+                </p>
+                <label>Pilih Teknisi</label>
+                <div style="display: flex; gap: 10px;">
+                    <select id="pilihTeknisiTim" style="flex: 1; font-weight: 600; padding: 10px; border: 1px solid var(--border); border-radius: 6px;">
+                        <option value="">-- Muat Daftar Teknisi --</option>
+                    </select>
+                    <button class="btn-time" onclick="muatDaftarTeknisi()" id="btnRefreshTeknisi" style="padding: 0 15px; font-size: 14px;"><i class="fa-solid fa-rotate"></i></button>
+                </div>
+                <button class="btn-outline-primary" onclick="lihatLogTim()" id="btnLihatLogTim" style="margin-top: 15px;">
+                    <i class="fa-solid fa-magnifying-glass"></i> Lihat Pekerjaan
+                </button>
+                <ul class="timeline" id="listLogTim"></ul>
             </div>
-            <div class="dash-card">
-                <h4>Kendala</h4>
-                <p class="val" style="color: #f59f00;">0</p>
-            </div>
+            
         </div>
-
-        <div class="dash-card" style="text-align: left;">
-            <h4>Area Terbanyak Minggu Ini</h4>
-            <p style="font-size: 14px; font-weight: 600; margin: 10px 0 0 0; color: var(--text-main);">- Belum ada data -</p>
-        </div>
-    </div>
-
-    <div id="tab-tim" class="content">
-        <h3>Aktivitas Rekan Tim</h3>
-        <p style="font-size: 13px; color: var(--text-muted); margin-top: -5px; margin-bottom: 20px;">
-            Pilih nama teknisi untuk melihat aktivitas mereka hari ini.
-        </p>
-        <label>Pilih Teknisi</label>
-        <div style="display: flex; gap: 10px;">
-            <select id="pilihTeknisiTim" style="flex: 1; font-weight: 600; padding: 10px; border: 1px solid var(--border); border-radius: 6px;">
-                <option value="">-- Muat Daftar Teknisi --</option>
-            </select>
-            <button class="btn-time" onclick="muatDaftarTeknisi()" id="btnRefreshTeknisi" style="padding: 0 15px; font-size: 14px;"><i class="fa-solid fa-rotate"></i></button>
-        </div>
-        <button class="btn-outline-primary" onclick="lihatLogTim()" id="btnLihatLogTim" style="margin-top: 15px;">
-            <i class="fa-solid fa-magnifying-glass"></i> Lihat Pekerjaan
-        </button>
-        <ul class="timeline" id="listLogTim"></ul>
-    </div>
-
-</div>
-
-<script src="app.js"></script>
-
-</body>
+        
+        <script src="app.js"></script>
+        
+    </body>
 </html>
