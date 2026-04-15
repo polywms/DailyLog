@@ -7,7 +7,6 @@ const today = new Date();
 const formatTanggalUI = today.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 const formatTanggalCek = today.toLocaleDateString('id-ID');
 
-
 const tanggalTerakhirBuka = localStorage.getItem('tanggalLogTerakhir');
 if (tanggalTerakhirBuka !== formatTanggalCek) {
     localStorage.removeItem('dailyLogTeknisi');
@@ -19,7 +18,8 @@ let currentState = 'BERANGKAT', aktifTaskId = '', aktifWaktuBerangkat = '', akti
 let isSyncing = false;
 
 window.onload = function() {
-    document.getElementById('tanggal').value = today.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    document.getElementById('tanggal').value = formatTanggalUI;
+    
     tampilkanLog();
     const savedName = localStorage.getItem('logSettingNama');
     const savedTipe = localStorage.getItem('logSettingTipe') || 'Kunjungan'; 
@@ -35,7 +35,7 @@ window.onload = function() {
 }
 
 // ==============================================
-// FUNGSI TABS & PANTAU TIM
+// FUNGSI TABS, SIDEBAR & PANTAU TIM
 // ==============================================
 function switchTab(tabId) {
     document.querySelectorAll('.content').forEach(el => el.classList.remove('active'));
@@ -45,6 +45,24 @@ function switchTab(tabId) {
     if (tabId === 'tim') {
         const select = document.getElementById('pilihTeknisiTim');
         if (select.options.length <= 1) muatDaftarTeknisi();
+    }
+}
+
+// Fungsi Buka-Tutup Sidebar Pengaturan
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebarMenu');
+    const overlay = document.getElementById('sidebarOverlay');
+    
+    if (sidebar.classList.contains('active')) {
+        sidebar.classList.remove('active');
+        overlay.style.opacity = '0';
+        setTimeout(() => overlay.style.display = 'none', 300);
+    } else {
+        overlay.style.display = 'block';
+        setTimeout(() => {
+            overlay.style.opacity = '1';
+            sidebar.classList.add('active');
+        }, 10);
     }
 }
 
@@ -107,7 +125,14 @@ function cekModalNamaHarian() {
         document.getElementById('teksNamaTeknisi').innerText = nama; document.getElementById('kontenBelumAdaNama').style.display = 'none'; document.getElementById('kontenKonfirmasiNama').style.display = 'block'; document.getElementById('modalNamaHarian').style.display = 'flex';
     } else { cekModalBulanan(); }
 }
-function tutorBukaIdentitas() { document.getElementById('modalNamaHarian').style.display = 'none'; switchTab('identitas'); setTimeout(() => document.getElementById('nama').focus(), 100); }
+
+function tutorBukaIdentitas() { 
+    document.getElementById('modalNamaHarian').style.display = 'none'; 
+    // Buka sidebar bukan pindah tab
+    toggleSidebar();
+    setTimeout(() => document.getElementById('nama').focus(), 100); 
+}
+
 function konfirmasiNamaSiap() { localStorage.setItem('logTanggalKonfirmasiNama', new Date().toLocaleDateString('id-ID')); document.getElementById('modalNamaHarian').style.display = 'none'; cekModalBulanan(); }
 function cekModalBulanan() { const d = new Date(); if (d.getDate() === 1 && localStorage.getItem('logBulanModalMuncul') !== (d.getMonth() + "-" + d.getFullYear())) { document.getElementById('modalBulanan').style.display = 'flex'; } }
 function konfirmasiModalBulanan() {
@@ -155,19 +180,15 @@ function eksekusiFase() {
         if (!aktifNamaKlien || !aktifAlamatKlien) { alert('Isi Nama Customer & Alamatnya!'); resetSliderVisual(); return; }
         
         aktifWaktuBerangkat = getWaktuSekarang(); 
-        aktifTaskId = "T" + Date.now(); // Buat Nomor Resi/Task ID Unik
+        aktifTaskId = "T" + Date.now(); 
         currentState = 'SAMPAI'; 
         simpanStateTiket(); 
-        
-        // PUSH DATA KE SERVER
         kirimDataParsial('simpan_berangkat');
 
     } else if (currentState === 'SAMPAI') {
         aktifWaktuSampai = getWaktuSekarang(); 
         currentState = 'SELESAI'; 
         simpanStateTiket(); 
-        
-        // UPDATE DATA DI SERVER
         kirimDataParsial('update_sampai');
 
     } else if (currentState === 'SELESAI') {
@@ -178,22 +199,10 @@ function eksekusiFase() {
 }
 
 function kirimDataParsial(aksi) {
-    const payload = {
-        action: aksi,
-        taskId: aktifTaskId,
-        nama: localStorage.getItem('logSettingNama'),
-        tanggal: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-        tipe: 'Kunjungan',
-        namaKlien: aktifNamaKlien,
-        alamatKlien: aktifAlamatKlien
-    };
-    
+    const payload = { action: aksi, taskId: aktifTaskId, nama: localStorage.getItem('logSettingNama'), tanggal: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }), tipe: 'Kunjungan', namaKlien: aktifNamaKlien, alamatKlien: aktifAlamatKlien };
     if (aksi === 'simpan_berangkat') payload.jamBerangkat = aktifWaktuBerangkat;
     if (aksi === 'update_sampai') payload.jamSampai = aktifWaktuSampai;
-
-    let antrean = JSON.parse(localStorage.getItem('antreanLog')) || [];
-    antrean.push(payload);
-    localStorage.setItem('antreanLog', JSON.stringify(antrean));
+    let antrean = JSON.parse(localStorage.getItem('antreanLog')) || []; antrean.push(payload); localStorage.setItem('antreanLog', JSON.stringify(antrean));
     jalankanSync();
 }
 
@@ -206,6 +215,7 @@ function batalTiket() {
         renderUIBerdasarkanState();
     }
 }
+
 function renderUIBerdasarkanState() {
     document.getElementById('formCustomerArea').style.display = currentState === 'BERANGKAT' ? 'block' : 'none';
     if (currentState !== 'BERANGKAT') {
@@ -216,7 +226,7 @@ function renderUIBerdasarkanState() {
     document.getElementById('formDetailArea').style.display = currentState === 'SELESAI' ? 'block' : 'none';
     sliderContainer.className = `slider-container state-${currentState.toLowerCase()}`;
     if (currentState === 'BERANGKAT') { sliderText.innerText = 'Geser Mulai Perjalanan >>'; sliderText.style.color = '#495057'; sliderThumb.innerHTML = '<i class="fa-solid fa-motorcycle"></i>'; } 
-    else if (currentState === 'SAMPAI') { sliderText.innerText = 'Geser Sudah Sampai >>'; sliderText.style.color = 'white'; sliderThumb.innerHTML = '<i class="fa-solid fa-location-dot"></i>'; } 
+    else if (currentState === 'SAMPAI') { sliderText.innerText = 'Geser Sudah Sampai >>'; sliderText.style.color = '#343a40'; sliderThumb.innerHTML = '<i class="fa-solid fa-location-dot"></i>'; } 
     else if (currentState === 'SELESAI') { sliderText.innerText = 'Geser Selesai & Simpan >>'; sliderText.style.color = 'white'; sliderThumb.innerHTML = '<i class="fa-solid fa-check-double"></i>'; }
     resetSliderVisual();
 }
@@ -231,7 +241,7 @@ function simpanDataFinalKunjungan() {
 
 function simpanDataInternal() {
     const jamMulai = document.getElementById('jamMulaiInternal').value, jamSelesai = document.getElementById('jamSelesaiInternal').value, detail = document.getElementById('detailInternal').value;
-    if(!localStorage.getItem('logSettingNama')) { alert('Isi Identitas dulu!'); switchTab('identitas'); return; }
+    if(!localStorage.getItem('logSettingNama')) { alert('Isi Identitas dulu!'); toggleSidebar(); return; }
     if(!jamMulai || !jamSelesai || !detail) { alert('Isi Jam Mulai, Selesai, dan Detail!'); return; }
     if (jamMulai > jamSelesai) { alert(`⚠️ ERROR WAKTU!\n\nJam Mulai (${jamMulai}) lebih besar/malam daripada Jam Selesai (${jamSelesai}).\n\nAnda pasti tidak sengaja memilih PM (Malam). Silakan betulkan jamnya!`); return; }
     let cekJamMalam = parseInt(jamMulai.split(':')[0]);
@@ -251,7 +261,6 @@ function mintaGPSDanSimpan(payload) {
 function eksekusiSimpanGPS(gps, payload) {
     const dataBaru = { action: payload.action || "simpan", nama: localStorage.getItem('logSettingNama'), tanggal: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }), gps: gps, ...payload };
     
-    // Tampilkan di log lokal hp teknisi jika tugas selesai
     if (payload.tipe === 'Tugas Internal / CS' || payload.action === 'update_selesai') {
         logData.push(dataBaru); localStorage.setItem('dailyLogTeknisi', JSON.stringify(logData));
     }
@@ -293,7 +302,7 @@ async function jalankanSync() {
     
     isSyncing = true;
     const btnTabHarian = document.getElementById('btn-harian');
-    const modalSync = document.getElementById('modalSync'); // Popup jangan tutup aplikasi
+    const modalSync = document.getElementById('modalSync'); 
 
     try {
         if (modalSync) modalSync.style.display = 'flex';

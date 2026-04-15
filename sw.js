@@ -1,10 +1,11 @@
 // UBAH NAMA INI SETIAP KALI ADA UPDATE FITUR BARU!
-const CACHE_NAME = 'artemis-log-v11'; 
+const CACHE_NAME = 'artemis-log-v12'; 
 
 const urlsToCache = [
     './',
     './index.html',
     './app.js',
+    './style.css',
     './manifest.json',
     './icon.png',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'

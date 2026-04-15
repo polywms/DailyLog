@@ -13,96 +13,18 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Artemis Log">
-    <meta name="mobile-web-app-capable" content="yes">
-    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
 
-    <style>
-        :root {
-            --primary: #d92534; --primary-dark: #b81f2c; --bg: #e9ecef; --surface: #ffffff; 
-            --border: #dee2e6; --text-main: #495057; --text-muted: #868e96; 
-        }
-        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-        body { background-color: var(--bg); margin: 0; padding: 10px; color: var(--text-main); display: flex; justify-content: center; }
-        
-        .app-container { background: var(--surface); width: 100%; max-width: 480px; min-height: 95vh; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); overflow: hidden; display: flex; flex-direction: column; border-top: 5px solid var(--primary); }
-        .app-header { padding: 15px 20px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
-        .app-header h1 { margin: 0; font-size: 18px; color: var(--primary); font-weight: 700; }
-        .app-header i { font-size: 20px; color: var(--primary); }
-        
-        .tabs { display: flex; border-bottom: 1px solid var(--border); background: #f8f9fa; }
-        .tab-btn { flex: 1; padding: 14px 0; text-align: center; font-weight: 600; font-size: 13px; color: var(--text-muted); cursor: pointer; background: none; border: none; border-bottom: 3px solid transparent; outline: none; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
-        .tab-btn.active { color: var(--primary); border-bottom: 3px solid var(--primary); background: var(--surface); }
-
-        .content { padding: 20px; display: none; }
-        .content.active { display: block; animation: fadeIn 0.3s ease; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-
-        h3 { margin: 0 0 15px 0; font-size: 16px; font-weight: 600; color: var(--text-main); border-bottom: 1px dashed var(--border); padding-bottom: 10px; }
-        label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px; display: block; margin-top: 15px; }
-        
-        input, select, textarea { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 6px; background: #fff; font-size: 14px; color: var(--text-main); outline: none; transition: 0.2s; }
-        input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(217, 37, 52, 0.1); }
-        textarea { resize: vertical; min-height: 90px; }
-
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        
-        .radio-toggle { display: flex; background: #f8f9fa; border: 1px solid var(--border); border-radius: 6px; padding: 3px; gap: 3px; margin-bottom: 10px; }
-        .radio-toggle label { margin: 0; flex: 1; text-align: center; padding: 10px; font-size: 13px; font-weight: 600; color: var(--text-muted); border-radius: 4px; cursor: pointer; text-transform: none; transition: 0.2s; }
-        .radio-toggle input { display: none; }
-        .radio-toggle input:checked + label { background: var(--primary); color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        
-        .time-wrapper { display: flex; gap: 8px; }
-        .btn-time { background: #f8f9fa; color: var(--text-main); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; font-weight: 600; font-size: 10px; cursor: pointer; white-space: nowrap; transition: 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
-        .btn-time i { font-size: 14px; }
-        .btn-time:active { background: #e9ecef; }
-
-        .btn-primary { background: var(--primary); color: white; border: none; padding: 14px; width: 100%; border-radius: 6px; font-size: 14px; font-weight: 700; margin-top: 25px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px rgba(217, 37, 52, 0.2); display: flex; justify-content: center; align-items: center; gap: 8px; }
-        .btn-primary:active { transform: scale(0.98); background: var(--primary-dark); }
-        
-        .btn-outline { background: white; border: 1px solid var(--border); color: var(--text-main); padding: 12px; width: 100%; border-radius: 6px; font-size: 13px; font-weight: 600; margin-top: 10px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; transition: 0.2s;}
-        .btn-outline:active { background: #f8f9fa; }
-        .btn-danger { color: var(--primary); border-color: #f5c6cb; background: #f8d7da; margin-top: 15px; }
-        .btn-outline-primary { background: white; border: 2px solid var(--primary); color: var(--primary); padding: 12px; width: 100%; border-radius: 6px; font-size: 14px; font-weight: 700; margin-top: 10px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; transition: 0.2s; }
-        .btn-outline-primary:active { background: #fef2f2; }
-
-        .timeline { list-style: none; padding: 0; margin: 30px 0 0 0; border-top: 2px solid #f8f9fa; padding-top: 20px; }
-        .timeline li { padding: 15px; border-left: 4px solid var(--primary); border-radius: 0 6px 6px 0; margin-bottom: 12px; background: #f8f9fa; position: relative; }
-        .timeline-time { font-size: 11px; font-weight: 700; color: #fff; background: var(--primary); padding: 4px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px; margin-bottom: 8px; }
-        .timeline-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; color: var(--text-main); }
-        .timeline-desc { font-size: 13px; color: var(--text-muted); line-height: 1.4; }
-        .timeline-gps { font-size: 11px; color: #adb5bd; margin-top: 8px; display: flex; align-items: center; gap: 5px; }
-        .empty-state { text-align: center; color: var(--text-muted); padding: 20px; font-size: 13px; border: 1px dashed var(--border); border-radius: 8px; margin-top: 15px;}
-
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center; padding: 20px; backdrop-filter: blur(3px); }
-        .modal-content { background: var(--surface); width: 100%; max-width: 360px; border-radius: 12px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border-top: 6px solid var(--primary); animation: fadeIn 0.3s ease; }
-
-        /* --- STYLE UNTUK SLIDER --- */
-        .slider-container { position: relative; width: 100%; height: 52px; background-color: #f1f3f5; border-radius: 26px; margin-top: 25px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); touch-action: none; }
-        .slider-text { position: absolute; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; font-size: 14px; font-weight: 700; color: var(--text-muted); pointer-events: none; z-index: 1; transition: color 0.3s; }
-        .slider-bg { position: absolute; top: 0; left: 0; height: 100%; width: 0; background-color: var(--primary); border-radius: 26px; z-index: 2; transition: width 0.1s, background-color 0.3s; }
-        .slider-thumb { position: absolute; top: 3px; left: 3px; width: 46px; height: 46px; background-color: white; border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.2); display: flex; justify-content: center; align-items: center; font-size: 18px; cursor: pointer; z-index: 3; transition: left 0.1s, color 0.3s; }
-        .slider-container.state-berangkat .slider-bg { background-color: #339af0; } .slider-container.state-berangkat .slider-thumb { color: #339af0; } .slider-container.state-berangkat .slider-text { color: #495057; }
-        .slider-container.state-sampai .slider-bg { background-color: #f59f00; } .slider-container.state-sampai .slider-thumb { color: #f59f00; } .slider-container.state-sampai .slider-text { color: white; }
-        .slider-container.state-selesai .slider-bg { background-color: #40c057; } .slider-container.state-selesai .slider-thumb { color: #40c057; } .slider-container.state-selesai .slider-text { color: white; }
-        .slider-container.disabled { opacity: 0.7; pointer-events: none; }
-
-        #tiketPerjalanan { background: #e7f5ff; border-left: 4px solid #339af0; padding: 15px; border-radius: 6px; margin-bottom: 10px; display: none; }
-        #tiketPerjalanan h4 { margin: 0 0 5px 0; color: #1864ab; font-size: 14px;}
-        #tiketPerjalanan p { margin: 0; font-size: 13px; color: #495057; line-height: 1.4; }
-        .tiket-waktu { background: #fff; border: 1px solid #dee2e6; padding: 8px; border-radius: 6px; margin-top: 15px; font-size: 12px; display: flex; justify-content: space-between; }
-        .tiket-waktu div { display: flex; flex-direction: column; align-items: center; }
-        .tiket-waktu span { font-weight: bold; color: var(--primary); font-size: 14px; margin-top: 2px;}
-    </style>
 </head>
 <body>
 
-    <div id="modalSync" class="modal-overlay" style="z-index: 9999;">
+<div id="modalSync" class="modal-overlay" style="z-index: 4000;">
     <div class="modal-content" style="text-align: center; background: transparent; box-shadow: none; border: none; padding: 0;">
         <div style="background: var(--surface); padding: 30px; border-radius: 12px; display: inline-block; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
             <i class="fa-solid fa-cloud-arrow-up fa-bounce" style="font-size: 45px; color: var(--primary); margin-bottom: 15px;"></i>
             <h3 style="margin: 0 0 10px 0; border: none; color: var(--text-main);">Mengirim Data...</h3>
-            <p style="margin: 0; font-size: 13px; color: var(--text-muted); font-weight: 600;">Jangan tutup aplikasi sebelum proses selesai.</p>
+            <p style="margin: 0; font-size: 13px; color: var(--text-muted); font-weight: 600;">Jangan tutup aplikasi.</p>
         </div>
     </div>
 </div>
@@ -113,7 +35,7 @@
             <i class="fa-solid fa-user-shield" style="font-size: 45px; color: var(--primary); margin-bottom: 15px;"></i>
             <h3 style="margin-top:0; border-bottom: none; color: var(--text-main);">Selamat Datang!</h3>
             <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 25px;">Silakan atur Identitas / Nama Anda sebelum mulai bekerja.</p>
-            <button class="btn-primary" onclick="tutorBukaIdentitas()" style="margin-top: 0;"><i class="fa-solid fa-gear"></i> Buka Pengaturan Identitas</button>
+            <button class="btn-primary" onclick="tutorBukaIdentitas()" style="margin-top: 0;"><i class="fa-solid fa-gear"></i> Buka Pengaturan</button>
         </div>
         <div id="kontenKonfirmasiNama" style="display: none;">
             <i class="fa-solid fa-circle-user" style="font-size: 45px; color: var(--primary); margin-bottom: 15px;"></i>
@@ -128,7 +50,7 @@
 <div id="modalBulanan" class="modal-overlay">
     <div class="modal-content">
         <h3 style="margin-top:0; border-bottom: none; padding-bottom: 0; font-size: 18px; color: var(--primary);"><i class="fa-regular fa-calendar-check"></i> Tugas Bulan Ini</h3>
-        <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.5;">Bulan baru telah tiba! Silakan pilih mode penugasan Anda untuk bulan ini:</p>
+        <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.5;">Silakan pilih mode penugasan Anda untuk bulan ini:</p>
         <div class="radio-toggle" style="margin-bottom: 20px;">
             <input type="radio" id="modalModeLapangan" name="modalTipe" value="Kunjungan" checked>
             <label for="modalModeLapangan">Kunjungan</label>
@@ -139,16 +61,49 @@
     </div>
 </div>
 
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+<div class="sidebar" id="sidebarMenu">
+    <div class="sidebar-header">
+        <h3><i class="fa-solid fa-gear"></i> Pengaturan</h3>
+        <button class="btn-close-sidebar" onclick="toggleSidebar()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="sidebar-content">
+        <label>Nama Teknisi</label>
+        <input type="text" id="nama" placeholder="Nama Anda..." oninput="simpanNama()">
+        
+        <label>Tanggal</label>
+        <input type="text" id="tanggal" readonly style="color: var(--text-muted); background: #f8f9fa;">
+        
+        <div style="margin-top: 25px; border-top: 1px dashed var(--border); padding-top: 15px;">
+            <label>Mode Penugasan</label>
+            <div class="radio-toggle">
+                <input type="radio" id="modeLapangan" name="tipe" value="Kunjungan" onchange="gantiMode(this)">
+                <label for="modeLapangan">Kunjungan</label>
+                <input type="radio" id="modeCS" name="tipe" value="Tugas Internal / CS" onchange="gantiMode(this)">
+                <label for="modeCS">Internal</label>
+            </div>
+        </div>
+
+        <div style="margin-top: 25px; border-top: 1px dashed var(--border); padding-top: 15px;">
+            <label>Tema Tampilan (Soon)</label>
+            <button class="btn-outline" style="margin-top:0;" disabled><i class="fa-solid fa-moon"></i> Mode Gelap (Off)</button>
+        </div>
+    </div>
+</div>
+
 <div class="app-container">
     <div class="app-header">
-        <i class="fa-solid fa-crosshairs"></i>
-        <h1>Teknisi Daily Log</h1>
+        <div class="header-title">
+            <i class="fa-solid fa-crosshairs"></i>
+            <h1>Artemis Log</h1>
+        </div>
+        <button class="btn-menu" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
     </div>
 
     <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('harian')" id="btn-harian"><i class="fa-solid fa-list-check"></i> Harian</button>
-        <button class="tab-btn" onclick="switchTab('tim')" id="btn-tim"><i class="fa-solid fa-users"></i> Pantau Tim</button>
-        <button class="tab-btn" onclick="switchTab('identitas')" id="btn-identitas"><i class="fa-solid fa-user-gear"></i> Identitas</button>
+        <button class="tab-btn active" onclick="switchTab('harian')" id="btn-harian"><i class="fa-solid fa-list-check"></i> <span>Harian</span></button>
+        <button class="tab-btn" onclick="switchTab('dashboard')" id="btn-dashboard"><i class="fa-solid fa-chart-pie"></i> <span>Dashboard</span></button>
+        <button class="tab-btn" onclick="switchTab('tim')" id="btn-tim"><i class="fa-solid fa-users"></i> <span>Tim</span></button>
     </div>
 
     <div id="tab-harian" class="content active">
@@ -206,7 +161,7 @@
                 </div>
             </div>
             <label>Detail Pekerjaan [Wajib isi]</label>
-            <textarea id="detailInternal" placeholder="Jelaskan apa saja yang dikerjakan... Tulis 'Lancar' kalau tidak ada masalah"></textarea>
+            <textarea id="detailInternal" placeholder="Jelaskan apa saja yang dikerjakan..."></textarea>
             <label>Kendala [Kosongkan jika lancar]</label>
             <input type="text" id="kendalaInternal" placeholder="Misal: WIP COMP">
             <button class="btn-primary" onclick="simpanDataInternal()" id="btnSimpanInternal"><i class="fa-solid fa-floppy-disk"></i> SIMPAN TUGAS INTERNAL</button>
@@ -215,6 +170,29 @@
         <ul class="timeline" id="listLog"></ul>
         <div style="margin-top: 15px;" id="exportArea">
             <button class="btn-outline btn-danger" onclick="hapusSemua()"><i class="fa-solid fa-trash-can"></i> Hapus Semua Data Hari Ini</button>
+        </div>
+    </div>
+
+    <div id="tab-dashboard" class="content">
+        <h3>Ringkasan Kinerja (Dummy)</h3>
+        <p style="font-size: 13px; color: var(--text-muted); margin-top: -5px; margin-bottom: 20px;">
+            Statistik data pengerjaan mingguan kamu akan muncul di sini. (Dalam proses pengerjaan).
+        </p>
+
+        <div class="grid-2">
+            <div class="dash-card">
+                <h4>Tugas Selesai</h4>
+                <p class="val">0</p>
+            </div>
+            <div class="dash-card">
+                <h4>Kendala</h4>
+                <p class="val" style="color: #f59f00;">0</p>
+            </div>
+        </div>
+
+        <div class="dash-card" style="text-align: left;">
+            <h4>Area Terbanyak Minggu Ini</h4>
+            <p style="font-size: 14px; font-weight: 600; margin: 10px 0 0 0; color: var(--text-main);">- Belum ada data -</p>
         </div>
     </div>
 
@@ -236,21 +214,6 @@
         <ul class="timeline" id="listLogTim"></ul>
     </div>
 
-    <div id="tab-identitas" class="content">
-        <h3>Pengaturan Teknisi</h3>
-        <p style="font-size: 13px; color: var(--text-muted); margin-top: -5px; margin-bottom: 20px;">Atur identitas dan mode pekerjaan. Pengaturan ini tersimpan otomatis.</p>
-        <div class="grid-2">
-            <div><label>Nama Teknisi</label><input type="text" id="nama" placeholder="Nama Anda..." oninput="simpanNama()"></div>
-            <div><label>Tanggal</label><input type="text" id="tanggal" readonly style="color: var(--text-muted); background: #f8f9fa;"></div>
-        </div>
-        <label>Mode Penugasan Saat Ini</label>
-        <div class="radio-toggle">
-            <input type="radio" id="modeLapangan" name="tipe" value="Kunjungan" onchange="gantiMode(this)">
-            <label for="modeLapangan">Kunjungan</label>
-            <input type="radio" id="modeCS" name="tipe" value="Tugas Internal / CS" onchange="gantiMode(this)">
-            <label for="modeCS">Internal/CS</label>
-        </div>
-    </div>
 </div>
 
 <script src="app.js"></script>
