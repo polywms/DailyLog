@@ -4,13 +4,22 @@
 const scriptURL = 'https://script.google.com/macros/s/AKfycbz26Ut7tFVm-22vNbAGnzSLMe9sak8_usjrwHT5AUoUL6NpnpghfdAEg1D7q0ECvGQg0Q/exec';
 
 const today = new Date();
-document.getElementById('tanggal').value = today.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+const formatTanggalUI = today.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+const formatTanggalCek = today.toLocaleDateString('id-ID');
+
+
+const tanggalTerakhirBuka = localStorage.getItem('tanggalLogTerakhir');
+if (tanggalTerakhirBuka !== formatTanggalCek) {
+    localStorage.removeItem('dailyLogTeknisi');
+    localStorage.setItem('tanggalLogTerakhir', formatTanggalCek);
+}
 
 let logData = JSON.parse(localStorage.getItem('dailyLogTeknisi')) || [];
 let currentState = 'BERANGKAT', aktifTaskId = '', aktifWaktuBerangkat = '', aktifWaktuSampai = '', aktifNamaKlien = '', aktifAlamatKlien = '';
 let isSyncing = false;
 
 window.onload = function() {
+    document.getElementById('tanggal').value = today.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
     tampilkanLog();
     const savedName = localStorage.getItem('logSettingNama');
     const savedTipe = localStorage.getItem('logSettingTipe') || 'Kunjungan'; 
