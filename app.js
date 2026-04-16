@@ -16,6 +16,7 @@ if (tanggalTerakhirBuka !== formatTanggalCek) {
 let logData = JSON.parse(localStorage.getItem('dailyLogTeknisi')) || [];
 let currentState = 'BERANGKAT', aktifTaskId = '', aktifWaktuBerangkat = '', aktifWaktuSampai = '', aktifNamaKlien = '', aktifAlamatKlien = '';
 let isSyncing = false;
+let isIstirahat = false, jamMulaiIstirahat = '';
 
 window.onload = function() {
     document.getElementById('tanggal').value = formatTanggalUI;
@@ -33,7 +34,8 @@ window.onload = function() {
     
     terapkanModePenugasan();
     cekModalNamaHarian();
-    pulihkanStateTiket(); 
+    pulihkanStateTiket();
+    pulihkanStatusIstirahat();
     jalankanSync();
     
     setInterval(() => { jalankanSync(); }, 10000);
@@ -137,7 +139,7 @@ async function lihatLogTim() {
                     const li = document.createElement('li');
                     let kendalaHTML = log.kendala ? `<div class="timeline-desc" style="color: var(--primary); font-weight: 600; margin-top: 4px;"><i class="fa-solid fa-triangle-exclamation"></i> Kendala: ${log.kendala}</div>` : '';
                     let titleTampilan = log.namaKlien ? `${log.namaKlien} <span style="font-weight: normal; font-size: 12px; color: var(--text-muted);">| ${log.alamatKlien}</span>` : "-";
-                    let teksJam = log.tipe === 'Kunjungan' || log.jamBerangkat !== '-' ? `Brgkt: ${log.jamBerangkat} &nbsp;|&nbsp; Tiba: ${log.jamSampai} &nbsp;|&nbsp; Selesai: ${log.jamSelesai}` : `Mulai: ${log.jamSampai} &nbsp;|&nbsp; Selesai: ${log.jamSelesai}`;
+                    let teksJam = log.tipe === 'Kunjungan' || log.jamBerangkat !== '-' ? `Berangkat: ${log.jamBerangkat} &nbsp;|&nbsp; Tiba: ${log.jamSampai} &nbsp;|&nbsp; Selesai: ${log.jamSelesai}` : `Mulai: ${log.jamSampai} &nbsp;|&nbsp; Selesai: ${log.jamSelesai}`;
                     li.innerHTML = `<div class="timeline-time"><i class="fa-regular fa-clock"></i> ${teksJam}</div><div class="timeline-title">${titleTampilan}</div><div class="timeline-desc">${log.detail}</div>${kendalaHTML}<div class="timeline-gps"><i class="fa-solid fa-location-dot"></i> ${log.gps}</div>`;
                     list.appendChild(li);
                 });
@@ -172,6 +174,96 @@ function konfirmasiModalBulanan() {
     const tipeDipilih = document.querySelector('input[name="modalTipe"]:checked').value; localStorage.setItem('logSettingTipe', tipeDipilih);
     document.getElementById(tipeDipilih === 'Kunjungan' ? 'modeLapangan' : 'modeCS').checked = true; terapkanModePenugasan();
     localStorage.setItem('logBulanModalMuncul', new Date().getMonth() + "-" + new Date().getFullYear()); document.getElementById('modalBulanan').style.display = 'none';
+}
+
+// ==============================================
+// FUNGSI ISTIRAHAT TEKNISI
+// ==============================================
+function bukaModalIstirahat() {
+    if(!localStorage.getItem('logSettingNama')) { alert('Isi Identitas dulu!'); toggleSidebar(); return; }
+    if(isIstirahat) { alert('Anda sedang istirahat! Tekan "Selesai Istirahat" dulu.'); return; }
+    document.getElementById('modalIstirahat').style.display = 'flex';
+}
+
+function tutupModalIstirahat() {
+    document.getElementById('modalIstirahat').style.display = 'none';
+}
+
+function mulaiIstirahat() {
+    jamMulaiIstirahat = getWaktuSekarang();
+    isIstirahat = true;
+    localStorage.setItem('statusIstirahat', JSON.stringify({ isIstirahat: true, jamMulai: jamMulaiIstirahat }));
+    
+    // Tampilkan overlay lock layar
+    document.getElementById('overlayIstirahat').style.display = 'flex';
+    updateTeksJamIstirahat();
+    
+    // Tutup modal konfirmasi
+    document.getElementById('modalIstirahat').style.display = 'none';
+    
+    // Nonaktifkan button istirahat
+    document.getElementById('btnIstirahat').disabled = true;
+    document.getElementById('btnIstirahat').style.opacity = '0.5';
+}
+
+function updateTeksJamIstirahat() {
+    if(isIstirahat) {
+        const jamSekarang = getWaktuSekarang();
+        document.getElementById('teksJamIstirahat').innerText = jamMulaiIstirahat + ' - ' + jamSekarang;
+        setTimeout(updateTeksJamIstirahat, 30000); // Update setiap 30 detik
+    }
+}
+
+function selesaiIstirahat() {
+    const jamSelesaiIstirahat = getWaktuSekarang();
+    
+    // Kirim data istirahat ke spreadsheet
+    const payloadIstirahat = { 
+        action: "simpan", 
+        taskId: "T" + Date.now(), 
+        jamBerangkat: "-", 
+        jamSampai: jamMulaiIstirahat, 
+        jamSelesai: jamSelesaiIstirahat, 
+        tipe: 'ISTIRAHAT', 
+        namaKlien: "ISTIRAHAT", 
+        alamatKlien: "Istirahat / Break", 
+        detail: "Istirahat Siang", 
+        kendala: "" 
+    };
+    
+    // Cari GPS dan simpan
+    mintaGPSDanSimpan(payloadIstirahat);
+    
+    // Clear istirahat state
+    isIstirahat = false;
+    jamMulaiIstirahat = '';
+    localStorage.removeItem('statusIstirahat');
+    
+    // Tutup overlay & aktifkan button istirahat kembali
+    document.getElementById('overlayIstirahat').style.display = 'none';
+    document.getElementById('btnIstirahat').disabled = false;
+    document.getElementById('btnIstirahat').style.opacity = '1';
+    
+    // Tampilkan notifikasi
+    alert('✓ Istirahat selesai. Data telah disimpan.');
+}
+
+// Pulihkan status istirahat saat page load
+function pulihkanStatusIstirahat() {
+    const statusIstirahat = localStorage.getItem('statusIstirahat');
+    if(statusIstirahat) {
+        const data = JSON.parse(statusIstirahat);
+        if(data.isIstirahat) {
+            jamMulaiIstirahat = data.jamMulai;
+            isIstirahat = true;
+            
+            // Tampilkan overlay lock kembali
+            document.getElementById('overlayIstirahat').style.display = 'flex';
+            updateTeksJamIstirahat();
+            document.getElementById('btnIstirahat').disabled = true;
+            document.getElementById('btnIstirahat').style.opacity = '0.5';
+        }
+    }
 }
 
 // ==============================================
@@ -294,9 +386,9 @@ function renderUIBerdasarkanState() {
     } else { document.getElementById('tiketPerjalanan').style.display = 'none'; }
     document.getElementById('formDetailArea').style.display = currentState === 'SELESAI' ? 'block' : 'none';
     sliderContainer.className = `slider-container state-${currentState.toLowerCase()}`;
-    if (currentState === 'BERANGKAT') { sliderText.innerText = 'Geser Mulai Perjalanan >>'; sliderText.style.color = '#495057'; sliderThumb.innerHTML = '<i class="fa-solid fa-motorcycle"></i>'; } 
-    else if (currentState === 'SAMPAI') { sliderText.innerText = 'Geser Sudah Sampai >>'; sliderText.style.color = '#343a40'; sliderThumb.innerHTML = '<i class="fa-solid fa-location-dot"></i>'; } 
-    else if (currentState === 'SELESAI') { sliderText.innerText = 'Geser Selesai & Simpan >>'; sliderText.style.color = 'white'; sliderThumb.innerHTML = '<i class="fa-solid fa-check-double"></i>'; }
+    if (currentState === 'BERANGKAT') { sliderText.innerText = 'Geser Mulai Perjalanan >>'; sliderThumb.innerHTML = '<i class="fa-solid fa-motorcycle"></i>'; } 
+    else if (currentState === 'SAMPAI') { sliderText.innerText = 'Geser Sudah Sampai >>'; sliderThumb.innerHTML = '<i class="fa-solid fa-location-dot"></i>'; } 
+    else if (currentState === 'SELESAI') { sliderText.innerText = 'Geser Selesai & Simpan >>'; sliderThumb.innerHTML = '<i class="fa-solid fa-check-double"></i>'; }
     resetSliderVisual();
 }
 
@@ -317,7 +409,7 @@ function simpanDataInternal() {
     if (cekJamMalam >= 19) { if(!confirm(`⚠️ PERINGATAN JAM KERJA!\n\nJam mulai tercatat malam hari: ${jamMulai}.\nJika ini harusnya pagi hari, berarti salah AM/PM. Lanjut simpan?`)) return; }
 
     document.getElementById('btnSimpanInternal').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> MENCARI GPS...'; document.getElementById('btnSimpanInternal').disabled = true;
-    const payloadTugas = { action: "simpan", jamBerangkat: "-", jamSampai: jamMulai, jamSelesai: jamSelesai, tipe: 'Tugas Internal / CS', namaKlien: document.getElementById('jenisTugasInternal').value, alamatKlien: "Internal / Kantor", detail: detail, kendala: document.getElementById('kendalaInternal').value };
+    const payloadTugas = { action: "simpan", taskId: "T" + Date.now(), jamBerangkat: "-", jamSampai: jamMulai, jamSelesai: jamSelesai, tipe: 'Tugas Internal / CS', namaKlien: document.getElementById('jenisTugasInternal').value, alamatKlien: "Internal / Kantor", detail: detail, kendala: document.getElementById('kendalaInternal').value };
     mintaGPSDanSimpan(payloadTugas);
 }
 
@@ -353,7 +445,7 @@ function tampilkanLog() {
     [...logData].reverse().forEach((log) => {
         const li = document.createElement('li');
         let kHtml = log.kendala ? `<div class="timeline-desc" style="color: var(--primary); font-weight: 600; margin-top: 4px;"><i class="fa-solid fa-triangle-exclamation"></i> Kendala: ${log.kendala}</div>` : '';
-        let teksJam = log.tipe === 'Kunjungan' ? `Brgkt: ${log.jamBerangkat} &nbsp;|&nbsp; Tiba: ${log.jamSampai} &nbsp;|&nbsp; Selesai: ${log.jamSelesai}` : `Mulai: ${log.jamSampai} &nbsp;|&nbsp; Selesai: ${log.jamSelesai}`;
+        let teksJam = log.tipe === 'Kunjungan' ? `Berangkat: ${log.jamBerangkat} &nbsp;|&nbsp; Tiba: ${log.jamSampai} &nbsp;|&nbsp; Selesai: ${log.jamSelesai}` : `Mulai: ${log.jamSampai} &nbsp;|&nbsp; Selesai: ${log.jamSelesai}`;
         li.innerHTML = `<div class="timeline-time"><i class="fa-regular fa-clock"></i> ${teksJam}</div><div class="timeline-title">${log.namaKlien || "-"} <span style="font-weight: normal; font-size: 12px; color: var(--text-muted);">| ${log.alamatKlien || "-"}</span></div><div class="timeline-desc">${log.detail}</div>${kHtml}<div class="timeline-gps"><i class="fa-solid fa-location-dot"></i> ${log.gps}</div>`;
         list.appendChild(li);
     });

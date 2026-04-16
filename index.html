@@ -47,6 +47,25 @@
             </div>
         </div>
         
+        <div id="modalIstirahat" class="modal-overlay">
+            <div class="modal-content" style="text-align: center;">
+                <i class="fa-solid fa-mug-hot" style="font-size: 45px; color: var(--primary); margin-bottom: 15px;"></i>
+                <h3 style="margin-top:0; border-bottom: none; color: var(--text-main);">Mau Istirahat Dulu?</h3>
+                <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 25px;">Teknisi akan istirahat dan layar akan terkunci sementara.</p>
+                <button class="btn-primary" onclick="mulaiIstirahat()" style="margin-top: 0; margin-right: 10px;"><i class="fa-solid fa-check"></i> Ya, Istirahat</button>
+                <button class="btn-outline-primary" onclick="tutupModalIstirahat()">Tidak, Lanjut Kerja</button>
+            </div>
+        </div>
+
+        <div id="overlayIstirahat" class="modal-overlay" style="display: none; z-index: 3999; background: rgba(0,0,0,0.7);">
+            <div class="modal-content" style="text-align: center; background: rgba(0,0,0,0.3); box-shadow: none; border: none; backdrop-filter: blur(8px);">
+                <i class="fa-solid fa-bed fa-bounce" style="font-size: 60px; color: #ffc107; margin-bottom: 20px;"></i>
+                <h2 style="margin: 0 0 10px 0; color: white; border: none;">ISTIRAHAT</h2>
+                <p id="teksJamIstirahat" style="font-size: 24px; font-weight: bold; color: #ffc107; margin: 10px 0 30px 0;">12:00 - ?</p>
+                <button class="btn-primary" onclick="selesaiIstirahat()" style="padding: 15px 30px; font-size: 16px;"><i class="fa-solid fa-bed"></i> Selesai Istirahat</button>
+            </div>
+        </div>
+
         <div id="modalBulanan" class="modal-overlay">
             <div class="modal-content">
                 <h3 style="margin-top:0; border-bottom: none; padding-bottom: 0; font-size: 18px; color: var(--primary);"><i class="fa-regular fa-calendar-check"></i> Tugas Bulan Ini</h3>
@@ -99,7 +118,10 @@
                     <i class="fa-solid fa-crosshairs"></i>
                     <h1>Daily Log Teknisi</h1>
                 </div>
-                <button class="btn-menu" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+                <div class="header-actions">
+                    <button class="btn-menu" id="btnIstirahat" onclick="bukaModalIstirahat()" title="Istirahat"><i class="fa-solid fa-mug-hot"></i></button>
+                    <button class="btn-menu" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+                </div>
             </div>
             
             <div class="tabs">
