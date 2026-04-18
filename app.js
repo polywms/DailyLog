@@ -32,6 +32,7 @@ let currentState = 'BERANGKAT', aktifTaskId = '', aktifWaktuBerangkat = '', akti
 let isSyncing = false;
 let isIstirahat = false, jamMulaiIstirahat = '';
 let selectedDashboardDate = new Date(); // Track selected date for dashboard filtering
+let currentDashboardTab = 'hari'; // Track current dashboard tab (hari or minggu)
 
 console.log('✅ Global variables initialized');
 console.log('📅 Today:', formatTanggalCek);
@@ -261,8 +262,12 @@ async function muatDashboardStats() {
     await populateDailyChart();
     console.log('✅ [muatDashboardStats] populateDailyChart() completed');
     
-    // Generate date pills
-    generateDatePills();
+    // Generate date pills sesuai tab yang aktif
+    if (currentDashboardTab === 'hari') {
+        generateDatePills();
+    } else if (currentDashboardTab === 'minggu') {
+        generateMonthPills();
+    }
     console.log('✅ [muatDashboardStats] COMPLETED');
 }
 
@@ -274,16 +279,25 @@ function switchDashboardTab(tab) {
     document.getElementById('tab-hari-btn').classList.remove('active');
     document.getElementById('tab-minggu-btn').classList.remove('active');
     
+    // Track current tab
+    currentDashboardTab = tab;
+    
     if (tab === 'hari') {
         document.getElementById('tab-hari-btn').classList.add('active');
         document.getElementById('dashboard-hari-view').classList.add('active');
         document.getElementById('dashboard-minggu-view').classList.remove('active');
+        // Generate date pills for daily view (7 days)
+        generateDatePills();
     } else {
         document.getElementById('tab-minggu-btn').classList.add('active');
         document.getElementById('dashboard-minggu-view').classList.add('active');
         document.getElementById('dashboard-hari-view').classList.remove('active');
+        // Generate month pills for weekly view (6 months)
+        generateMonthPills();
         // Populate weekly chart with real data
         populateWeeklyChart();
+        // Update weekly metrics
+        updateWeeklyMetrics();
     }
 }
 
@@ -473,83 +487,231 @@ async function populateDailyChart() {
 }
 
 // ===============================================
-// FUNGSI POPULATE WEEKLY CHART - Real Data
+// FUNGSI POPULATE WEEKLY CHART - Canvas-based (8 weeks, newest on right)
 // ===============================================
 async function populateWeeklyChart() {
-    const barChart = document.querySelector('.bar-chart');
-    let logData = JSON.parse(localStorage.getItem('dashboardHistoriSepekan')) || [];
+    console.log('═══════════════════════════════════════════════');
+    console.log('🎬 populateWeeklyChart() STARTED');
+    console.log('═══════════════════════════════════════════════');
     
-    console.log('📊 populateWeeklyChart() called');
-    console.log('📦 Initial data in localStorage:', logData.length);
+    const canvas = document.getElementById('weeklyBarChart');
+    if (!canvas) {
+        console.error('❌ FATAL: Canvas element not found!');
+        return;
+    }
+    console.log('✅ Canvas element found:', canvas);
     
-    // If no data, fetch it first
+    const ctx = canvas.getContext('2d');
+    console.log('✅ Canvas context 2d obtained');
+    
+    // Check localStorage
+    const storageKey = 'dashboardHistoriSepekan';
+    const rawData = localStorage.getItem(storageKey);
+    console.log(`📦 Checking localStorage key: "${storageKey}"`);
+    
+    let logData = JSON.parse(rawData) || [];
+    console.log(`📊 Parsed data count: ${logData.length} items`);
+    
     if (logData.length === 0) {
-        console.log('⏳ No data found, fetching from server...');
-        await muatHistoriSepekan();
-        logData = JSON.parse(localStorage.getItem('dashboardHistoriSepekan')) || [];
-        console.log('📦 Data after fetch:', logData.length);
+        console.log('⚠️ No data in localStorage, attempting to fetch from server...');
+        try {
+            await muatHistoriSepekan();
+            logData = JSON.parse(localStorage.getItem(storageKey)) || [];
+            console.log(`📦 After fetch - Data count: ${logData.length} items`);
+        } catch (err) {
+            console.error('❌ Fetch failed:', err);
+            return;
+        }
     }
     
-    // Get data for last 7 days + today
-    const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
-    const today = new Date();
-    const tasksByDay = {};
-    
-    // Initialize all days (8 days total: today + 7 back)
-    for (let i = 0; i <= 7; i++) {
-        const date = new Date(today);
-        date.setDate(date.getDate() - i);
-        const dayKey = date.toLocaleDateString('id-ID');
-        tasksByDay[dayKey] = { count: 0, day: dayNames[date.getDay()], date: date };
+    // Helper function: Get Monday of the week for a given date
+    function getMondayOfWeek(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff));
     }
     
-    console.log('📅 Days initialized:', Object.keys(tasksByDay));
+    // Get weeks for the selected month (not relative to today)
+    const selectedMonth = selectedDashboardDate.getMonth();
+    const selectedYear = selectedDashboardDate.getFullYear();
+    const tasksByWeek = {};
     
-    // Count all tasks (completed or in progress) for each day - not just jamSelesai
-    logData.forEach(item => {
-        if (item.tipe !== 'ISTIRAHAT' && item.tanggal) {
-            if (tasksByDay[item.tanggal]) {
-                tasksByDay[item.tanggal].count++;
-                console.log(`  ✓ ${item.tanggal}: ${item.namaKlien} (Status: ${item.jamSelesai ? 'Selesai' : 'Ongoing'})`);
-            } else {
-                console.log(`  ⚠️ Date not in range: ${item.tanggal}`);
-            }
+    console.log(`📅 Selected month: ${selectedMonth + 1}/${selectedYear}`);
+    
+    // Get first and last day of selected month
+    const firstDayOfMonth = new Date(selectedYear, selectedMonth, 1);
+    const lastDayOfMonth = new Date(selectedYear, selectedMonth + 1, 0);
+    
+    console.log(`📅 First day of month: ${firstDayOfMonth.toLocaleDateString('id-ID')}`);
+    console.log(`📅 Last day of month: ${lastDayOfMonth.toLocaleDateString('id-ID')}`);
+    
+    // Collect all weeks that fall within or overlap with the selected month
+    const weeksInMonth = new Set();
+    let currentDate = new Date(firstDayOfMonth);
+    
+    // Start from Monday of the first day's week
+    currentDate = getMondayOfWeek(currentDate);
+    
+    // Go until we pass the last day of the month (include partial weeks)
+    while (currentDate <= lastDayOfMonth) {
+        const weekKey = `${String(currentDate.getDate()).padStart(2, '0')}/${String(currentDate.getMonth() + 1).padStart(2, '0')}/${currentDate.getFullYear()}`;
+        const sunday = new Date(currentDate);
+        sunday.setDate(sunday.getDate() + 6);
+        const weekLabel = `${currentDate.getDate()}/${currentDate.getMonth() + 1} - ${sunday.getDate()}/${sunday.getMonth() + 1}`;
+        
+        tasksByWeek[weekKey] = { count: 0, week: weekLabel, mondayDate: new Date(currentDate) };
+        weeksInMonth.add(weekKey);
+        
+        // Move to next Monday
+        currentDate.setDate(currentDate.getDate() + 7);
+    }
+    
+    console.log(`📅 Weeks in/overlapping month (${weeksInMonth.size} weeks):`, Array.from(weeksInMonth).sort());
+    
+    // Count all tasks for each week
+    let itemsProcessed = 0;
+    let itemsMatched = 0;
+    let itemsSkipped = 0;
+    
+    logData.forEach((item, idx) => {
+        itemsProcessed++;
+        if (item.tipe === 'ISTIRAHAT') {
+            console.log(`  ⏸️ [${idx}] Skipped ISTIRAHAT: ${item.tanggal}`);
+            itemsSkipped++;
+            return;
+        }
+        if (!item.tanggal) {
+            console.log(`  ❌ [${idx}] No tanggal field`);
+            itemsSkipped++;
+            return;
+        }
+        
+        // Parse item date in format DD/MM/YYYY
+        const dateParts = item.tanggal.split('/');
+        if (dateParts.length !== 3) {
+            console.log(`  ❌ [${idx}] Invalid date format: "${item.tanggal}"`);
+            itemsSkipped++;
+            return;
+        }
+        
+        const itemDate = new Date(dateParts[2], dateParts[1] - 1, dateParts[0]);
+        const weekMonday = getMondayOfWeek(itemDate);
+        const weekKey = `${String(weekMonday.getDate()).padStart(2, '0')}/${String(weekMonday.getMonth() + 1).padStart(2, '0')}/${weekMonday.getFullYear()}`;
+        
+        if (tasksByWeek[weekKey]) {
+            tasksByWeek[weekKey].count++;
+            itemsMatched++;
+            console.log(`  ✓ [${idx}] MATCHED: ${item.tanggal} → ${weekKey}: ${item.namaKlien}`);
+        } else {
+            console.log(`  ⚠️ [${idx}] NO MATCH: "${weekKey}" tidak ada di tasksByWeek keys`);
+            itemsSkipped++;
         }
     });
     
-    console.log('📊 Tasks by day:', tasksByDay);
+    console.log(`📊 Processing summary: ${itemsProcessed} total | ${itemsMatched} matched | ${itemsSkipped} skipped`);
+    console.log(`📊 Tasks by week:`, tasksByWeek);
     
-    // Find max value for scaling (target is 5, but allow display up to actual max)
-    const maxTasks = Math.max(...Object.values(tasksByDay).map(d => d.count), 5);
-    const TARGET_PER_DAY = 5;
-    const targetPercentage = (TARGET_PER_DAY / maxTasks) * 100;
+    const weeks = Object.keys(tasksByWeek).sort();
     
-    console.log('🎯 Target per day: 5 | Max tasks: ' + maxTasks + ' | Target height: ' + targetPercentage + '%');
+    // If no weeks in selected month, show empty message
+    if (weeks.length === 0) {
+        console.log('⚠️ No weeks found for selected month');
+        // Draw empty canvas with message
+        ctx.fillStyle = '#e9ecef';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#868e96';
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Tidak ada data untuk bulan ini', canvas.width / 2, canvas.height / 2);
+        return;
+    }
     
-    // Generate bar chart HTML - show last 7 days in reverse (oldest to newest)
-    const dates = Object.keys(tasksByDay).sort();
-    let chartHTML = '';
+    const tasksPerWeek = weeks.map(w => tasksByWeek[w].count);
+    const maxTasks = Math.max(...tasksPerWeek, 35);
+    const TARGET_PER_WEEK = 35;
     
-    dates.forEach((dateStr) => {
-        const dayData = tasksByDay[dateStr];
-        const height = (dayData.count / maxTasks) * 100;
-        const status = dayData.count >= TARGET_PER_DAY ? '✓' : dayData.count > 0 ? '!' : '-';
-        const statusClass = dayData.count >= TARGET_PER_DAY ? 'success' : dayData.count > 0 ? 'warning' : 'empty';
+    console.log(`📊 Task counts per week: [${tasksPerWeek.join(', ')}]`);
+    console.log(`📊 Max tasks: ${maxTasks}, Target per week: ${TARGET_PER_WEEK}`);
+    
+    // Get actual canvas dimensions
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = 200;
+    
+    console.log(`🎨 Canvas size: ${canvas.width}px × ${canvas.height}px`);
+    
+    // Chart dimensions
+    const padding = 40;
+    const chartWidth = canvas.width - (padding * 2);
+    const chartHeight = canvas.height - padding - 50;
+    const barWidth = chartWidth / weeks.length - 5;
+    const targetLineY = padding + chartHeight - (TARGET_PER_WEEK / maxTasks) * chartHeight;
+    
+    console.log(`🎨 Chart calculations: padding=${padding}, barWidth=${barWidth}, chartHeight=${chartHeight}`);
+    
+    // Clear canvas
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    console.log('🎨 Canvas cleared');
+    
+    // Draw target line
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(padding, targetLineY);
+    ctx.lineTo(canvas.width - padding, targetLineY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    console.log(`🎨 Target line drawn at Y=${targetLineY}`);
+    
+    // Draw bars and labels
+    let barsDrawn = 0;
+    weeks.forEach((weekKey, index) => {
+        const weekData = tasksByWeek[weekKey];
+        const x = padding + (index * (barWidth + 5));
+        const barHeight = (weekData.count / maxTasks) * chartHeight;
+        const y = padding + chartHeight - barHeight;
         
-        chartHTML += `
-            <div class="bar-item">
-                <div class="bar-label">${dayData.day}</div>
-                <div class="bar-wrapper" style="position: relative;">
-                    <div class="target-line" style="position: absolute; bottom: ${targetPercentage}%; width: 100%; height: 2px; background: #ddd; z-index: 1;"></div>
-                    <div class="bar ${statusClass}" style="height: ${Math.max(height, 3)}%;"></div>
-                </div>
-                <div class="bar-value" title="${dateStr}">${dayData.count}/${TARGET_PER_DAY}</div>
-            </div>
-        `;
+        // Draw bar
+        if (weekData.count >= TARGET_PER_WEEK) {
+            ctx.fillStyle = '#28a745'; // Green - success
+        } else if (weekData.count > 0) {
+            ctx.fillStyle = '#d92534'; // Red - warning
+        } else {
+            ctx.fillStyle = '#e9ecef'; // Gray - empty
+        }
+        ctx.fillRect(x, y, barWidth, barHeight);
+        
+        // Draw border
+        ctx.strokeStyle = '#ddd';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, y, barWidth, barHeight);
+        
+        // Draw week label (Mg1, Mg2, etc. or W01, W02, etc.)
+        ctx.fillStyle = '#666';
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        const weekNum = index + 1;
+        ctx.fillText(`Mg${weekNum}`, x + barWidth / 2, canvas.height - 3);
+        
+        // Draw date label
+        ctx.fillStyle = '#999';
+        ctx.font = '10px Arial';
+        ctx.fillText(weekKey.split('/')[0], x + barWidth / 2, canvas.height - 25);
+        
+        // Draw count label on top of bar
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 11px Arial';
+        ctx.fillText(weekData.count, x + barWidth / 2, y - 5);
+        
+        console.log(`  🎨 Bar[${index}] Mg${weekNum} (${weekKey}): count=${weekData.count}, color=${weekData.count >= TARGET_PER_WEEK ? 'GREEN' : weekData.count > 0 ? 'RED' : 'GRAY'}`);
+        barsDrawn++;
     });
     
-    barChart.innerHTML = chartHTML;
-    console.log('✅ Weekly chart populated');
+    console.log(`✅ Chart complete! ${barsDrawn} bars drawn`);
+    console.log('═══════════════════════════════════════════════');
 }
 
 // ===============================================
@@ -732,6 +894,7 @@ async function muatLogHariIni() {
 function generateDatePills() {
     const container = document.getElementById('datePillsContainer');
     container.innerHTML = '';
+    container.classList.remove('month-view');
     
     console.log('🔄 generateDatePills() called');
     
@@ -747,7 +910,7 @@ function generateDatePills() {
     const datesArray = [];
     
     // Collect all dates first (7 days back to today)
-    for (let i = 7; i >= 0; i--) {
+    for (let i = 6; i >= 0; i--) {
         const date = new Date(today);
         date.setDate(date.getDate() - i);
         datesArray.push(date);
@@ -817,6 +980,193 @@ async function selectDatePill(pillElement, dateObj) {
     selectedDashboardDate = new Date(dateObj);
     console.log('📅 Updated selectedDashboardDate:', selectedStr);
     await muatDashboardStats();
+}
+
+// ===============================================
+// FUNGSI GENERATE MONTH PILLS (untuk tab mingguan)
+// ===============================================
+function generateMonthPills() {
+    const container = document.getElementById('datePillsContainer');
+    container.innerHTML = '';
+    container.classList.add('month-view');
+    
+    console.log('🔄 generateMonthPills() called');
+    
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    
+    console.log(`📅 Current date: ${today.toLocaleDateString('id-ID')}`);
+    
+    // Create array of 6 months (current month + 5 previous months)
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+        let month = currentMonth - i;
+        let year = currentYear;
+        
+        // Handle year boundary
+        if (month < 0) {
+            month += 12;
+            year -= 1;
+        }
+        
+        months.push({ month: month, year: year });
+    }
+    
+    console.log('📅 Months to display:', months);
+    
+    // Generate month pills
+    months.forEach((monthData, idx) => {
+        const pill = document.createElement('div');
+        pill.className = 'date-pill';
+        
+        // Display month name and year
+        const monthName = new Date(monthData.year, monthData.month).toLocaleDateString('id-ID', { month: 'short' });
+        const yearStr = String(monthData.year).slice(-2); // Get last 2 digits of year
+        
+        pill.innerHTML = `<span style="font-size: 13px;">${monthName}</span><span style="font-size: 10px; margin-top: 2px;">'${yearStr}</span>`;
+        
+        // Check if this month is current month
+        if (monthData.month === currentMonth && monthData.year === currentYear) {
+            pill.classList.add('active');
+            console.log(`✅ Active month: ${monthName}/${yearStr}`);
+        }
+        
+        // Store month data
+        pill.dataset.month = monthData.month;
+        pill.dataset.year = monthData.year;
+        
+        // Click handler
+        pill.onclick = () => selectMonthPill(pill, monthData);
+        
+        container.appendChild(pill);
+    });
+    
+    console.log('✅ Month pills generated');
+}
+
+// ===============================================
+// FUNGSI UPDATE WEEKLY METRICS
+// ===============================================
+async function updateWeeklyMetrics() {
+    console.log('📊 updateWeeklyMetrics() called');
+    
+    const storageKey = 'dashboardHistoriSepekan';
+    const rawData = localStorage.getItem(storageKey);
+    let logData = JSON.parse(rawData) || [];
+    
+    const dailyLogRaw = localStorage.getItem('dailyLogTeknisi');
+    const dailyLogData = JSON.parse(dailyLogRaw) || [];
+    
+    // Helper function: Get Monday of the week for a given date
+    function getMondayOfWeek(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff));
+    }
+    
+    // Get weeks for the selected month
+    const selectedMonth = selectedDashboardDate.getMonth();
+    const selectedYear = selectedDashboardDate.getFullYear();
+    const firstDayOfMonth = new Date(selectedYear, selectedMonth, 1);
+    const lastDayOfMonth = new Date(selectedYear, selectedMonth + 1, 0);
+    
+    // Collect all weeks in the month
+    const weeksInMonth = new Set();
+    let currentDate = new Date(firstDayOfMonth);
+    currentDate = getMondayOfWeek(currentDate);
+    
+    while (currentDate <= lastDayOfMonth) {
+        const weekKey = `${String(currentDate.getDate()).padStart(2, '0')}/${String(currentDate.getMonth() + 1).padStart(2, '0')}/${currentDate.getFullYear()}`;
+        weeksInMonth.add(weekKey);
+        currentDate.setDate(currentDate.getDate() + 7);
+    }
+    
+    console.log(`📊 Weeks in selected month:`, Array.from(weeksInMonth).sort());
+    
+    // Count total tugas across all weeks in the month
+    let totalTugas = 0;
+    let totalKendala = 0;
+    
+    // Count dari history data
+    logData.forEach(item => {
+        if (item.tipe === 'ISTIRAHAT' || !item.tanggal) return;
+        
+        // Parse date
+        const dateParts = item.tanggal.split('/');
+        if (dateParts.length !== 3) return;
+        
+        const itemDate = new Date(dateParts[2], dateParts[1] - 1, dateParts[0]);
+        const weekMonday = getMondayOfWeek(itemDate);
+        const weekKey = `${String(weekMonday.getDate()).padStart(2, '0')}/${String(weekMonday.getMonth() + 1).padStart(2, '0')}/${weekMonday.getFullYear()}`;
+        
+        if (weeksInMonth.has(weekKey)) {
+            const hasValidJamSelesai = item.jamSelesai && item.jamSelesai !== '-' && item.jamSelesai.trim() !== '';
+            if (hasValidJamSelesai) {
+                totalTugas++;
+            }
+        }
+    });
+    
+    // Count dari daily log
+    dailyLogData.forEach(item => {
+        if (item.tipe === 'ISTIRAHAT' || !item.tanggal) return;
+        
+        const dateParts = item.tanggal.split('/');
+        if (dateParts.length !== 3) return;
+        
+        const itemDate = new Date(dateParts[2], dateParts[1] - 1, dateParts[0]);
+        const weekMonday = getMondayOfWeek(itemDate);
+        const weekKey = `${String(weekMonday.getDate()).padStart(2, '0')}/${String(weekMonday.getMonth() + 1).padStart(2, '0')}/${weekMonday.getFullYear()}`;
+        
+        if (weeksInMonth.has(weekKey)) {
+            const hasValidJamSelesai = item.jamSelesai && item.jamSelesai !== '-' && item.jamSelesai.trim() !== '';
+            if (hasValidJamSelesai) {
+                totalTugas++;
+            }
+            
+            const hasKendala = item.kendala && item.kendala.trim() !== '' && item.kendala.trim() !== '-';
+            if (hasKendala) {
+                totalKendala++;
+            }
+        }
+    });
+    
+    console.log(`📊 Weekly metrics - Total tugas: ${totalTugas}, Total kendala: ${totalKendala}`);
+    
+    // Update UI
+    document.getElementById('metricValueWeeklyTugas').innerText = totalTugas;
+    document.getElementById('metricValueWeeklyKendala').innerText = totalKendala;
+    
+    // Change color based on target (35 for the month)
+    const metricTugasElement = document.getElementById('metricValueWeeklyTugas');
+    if (totalTugas >= 35) {
+        metricTugasElement.style.color = '#28a745'; // Green
+    } else {
+        metricTugasElement.style.color = 'var(--primary)'; // Red
+    }
+    
+    console.log('✅ Weekly metrics updated');
+}
+
+async function selectMonthPill(pillElement, monthData) {
+    console.log(`📌 selectMonthPill() - Selected: ${monthData.month + 1}/${monthData.year}`);
+    
+    // Remove active class from all pills
+    document.querySelectorAll('.date-pill').forEach(p => p.classList.remove('active'));
+    pillElement.classList.add('active');
+    
+    // Set selectedDashboardDate to first day of selected month
+    selectedDashboardDate = new Date(monthData.year, monthData.month, 1);
+    console.log('📅 Updated selectedDashboardDate:', selectedDashboardDate.toLocaleDateString('id-ID'));
+    
+    // Only refresh weekly chart, keep pills as monthly
+    console.log('📊 Refreshing weekly chart for selected month...');
+    await populateWeeklyChart();
+    
+    // Update weekly metrics
+    await updateWeeklyMetrics();
 }
 
 // ===============================================

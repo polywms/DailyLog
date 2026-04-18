@@ -181,6 +181,7 @@ body.dark-mode .slider-thumb { background-color: #444; }
 .date-pills {
     display: flex;
     gap: 4px;
+    margin-top: 15px;
     padding-bottom: 10px;
     flex-wrap: wrap;
     justify-content: center;
@@ -220,6 +221,17 @@ body.dark-mode .date-pill {
 body.dark-mode .date-pill.active {
     background: var(--primary);
     color: white;
+}
+
+/* Style untuk month pills */
+#datePillsContainer.month-view {
+    gap: 8px;
+}
+#datePillsContainer.month-view .date-pill {
+    width: 50px;
+    height: 50px;
+    border-radius: 4px;
+    flex-direction: column;
 }
 
 /* ===============================================
