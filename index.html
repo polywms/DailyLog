@@ -168,7 +168,14 @@
                         <label>Detail Pekerjaan [Wajib isi]</label>
                         <textarea id="detailKunjungan" placeholder="Jelaskan apa saja yang dikerjakan... Tulis 'Lancar' kalau tidak ada masalah"></textarea>
                         <label>Kendala [Kosongkan jika lancar]</label>
-                        <input type="text" id="kendalaKunjungan" placeholder="Misal: WIP COMP, Alamat Tdk Ketemu">
+                        <div style="display: grid; grid-template-columns: 120px 1fr; gap: 10px;">
+                            <select id="tipeKendala" style="padding: 10px; border: 1px solid var(--border); border-radius: 6px;">
+                                <option value="">-- Pilih --</option>
+                                <option value="WIP">WIP</option>
+                                <option value="Lainnya">Lainnya</option>
+                            </select>
+                            <input type="text" id="kendalaKunjungan" placeholder="Detail / Penyebab">
+                        </div>
                     </div>
                     <div class="slider-container state-berangkat" id="actionSlider">
                         <div class="slider-text" id="sliderText">Geser Mulai Perjalanan &gt;&gt;</div>
@@ -233,12 +240,15 @@
 
                 <!-- Main Metric Area (Hari View) -->
                 <div id="dashboard-hari-view" class="dashboard-view active">
-                    <div class="metric-area">
-                        <h4 class="metric-title">Total Tugas Selesai</h4>
-                        <div class="metric-value" id="metricValueTugasSelesai">0</div>
-                        <a href="javascript:void(0)" class="history-link" onclick="openTaskHistoryModal()">
-                            <i class="fa-solid fa-history"></i> Lihat Riwayat Tugas
-                        </a>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div class="metric-area" onclick="openTaskHistoryModal()" style="cursor: pointer;">
+                            <h4 class="metric-title">Total Tugas Selesai</h4>
+                            <div class="metric-value" id="metricValueTugasSelesai">0</div>
+                        </div>
+                        <div class="metric-area" onclick="openKendalaModal()" style="cursor: pointer;">
+                            <h4 class="metric-title">Total Kendala</h4>
+                            <div class="metric-value" id="metricValueKendala">0</div>
+                        </div>
                     </div>
                     
                     <!-- Weekly Bar Chart (on Hari view) -->
@@ -297,6 +307,21 @@
                                 <span class="task-location">Jl. Ahmad Yani No. 12, Bandung</span>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal: Kendala List -->
+            <div id="modalKendalaList" class="modal-overlay">
+                <div class="modal-content">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 15px;">
+                        <h3 style="margin: 0; border: none; padding: 0; color: var(--primary);">
+                            <i class="fa-solid fa-triangle-exclamation"></i> Tugas Bermasalah
+                        </h3>
+                        <button class="btn-close-modal" onclick="closeKendalaModal()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted);"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div id="kendalaListContainer" class="task-history-list">
+                        <!-- Kendala items akan di-generate oleh JavaScript -->
                     </div>
                 </div>
             </div>

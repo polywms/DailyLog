@@ -182,9 +182,9 @@ async function muatDashboardStats() {
         const isIstirahat = item.tipe === 'ISTIRAHAT';
         const noDate = !item.tanggal;
         const dateMatches = item.tanggal === selectedDateStr;
-        const hasJamSelesai = item.jamSelesai;
+        const hasValidJamSelesai = item.jamSelesai && item.jamSelesai !== '-' && item.jamSelesai.trim() !== '';
         
-        if (!isIstirahat && !noDate && dateMatches) {
+        if (!isIstirahat && !noDate && dateMatches && hasValidJamSelesai) {
             console.log(`  ✓ Item matched (history): ${item.namaKlien} | Date: ${item.tanggal} | Selesai: ${item.jamSelesai}`);
         }
         
@@ -199,7 +199,11 @@ async function muatDashboardStats() {
         if (!dateMatches) {
             return false;
         }
-        return !!hasJamSelesai;
+        if (!hasValidJamSelesai) {
+            console.log(`  ⏭️ Invalid jamSelesai: ${item.jamSelesai}`);
+            return false;
+        }
+        return true;
     }).length;
     
     // TAMBAHAN: Count dari daily log untuk hari ini juga
@@ -207,16 +211,20 @@ async function muatDashboardStats() {
         const isIstirahat = item.tipe === 'ISTIRAHAT';
         const noDate = !item.tanggal;
         const dateMatches = item.tanggal === selectedDateStr;
-        const hasJamSelesai = item.jamSelesai;
+        const hasValidJamSelesai = item.jamSelesai && item.jamSelesai !== '-' && item.jamSelesai.trim() !== '';
         
-        if (!isIstirahat && !noDate && dateMatches) {
+        if (!isIstirahat && !noDate && dateMatches && hasValidJamSelesai) {
             console.log(`  ✓ Item matched (daily): ${item.namaKlien} | Date: ${item.tanggal} | Selesai: ${item.jamSelesai}`);
         }
         
         if (item.tipe === 'ISTIRAHAT') return false;
         if (!item.tanggal) return false;
         if (!dateMatches) return false;
-        return !!hasJamSelesai;
+        if (!hasValidJamSelesai) {
+            console.log(`  ⏭️ Invalid jamSelesai in daily: ${item.jamSelesai}`);
+            return false;
+        }
+        return true;
     }).length;
     
     // Total dari kedua sumber
@@ -233,6 +241,20 @@ async function muatDashboardStats() {
         metricElement.style.color = 'var(--primary)'; // Merah default
     }
     console.log(`📤 [muatDashboardStats] Updated metric display with: ${tugasSelesaiTotal} (Color: ${tugasSelesaiTotal >= 5 ? 'GREEN' : 'RED'})`);
+    
+    // Count kendala (items dengan kendala tidak kosong & bukan hanya "-", untuk hari ini dari dailyLogData)
+    const kendalaCount = dailyLogData.filter(item => {
+        const dateMatches = item.tanggal === selectedDateStr;
+        const hasKendala = item.kendala && item.kendala.trim() !== '' && item.kendala.trim() !== '-';
+        if (dateMatches && hasKendala) {
+            console.log(`  ⚠️ Kendala found: ${item.namaKlien} | Kendala: ${item.kendala}`);
+        }
+        return dateMatches && hasKendala;
+    }).length;
+    
+    const kendalaElement = document.getElementById('metricValueKendala');
+    kendalaElement.innerText = kendalaCount;
+    console.log(`⚠️ [muatDashboardStats] Total kendala hari ini: ${kendalaCount}`);
     
     // Populate daily chart (now shows weekly data with async fetch)
     console.log('📊 [muatDashboardStats] Calling populateDailyChart()...');
@@ -819,10 +841,16 @@ function populateTaskHistory() {
     
     console.log('📖 populateTaskHistory() called');
     
-    // Ambil data log dari dashboard's weekly history (separate key)
-    const logData = JSON.parse(localStorage.getItem('dashboardHistoriSepekan')) || [];
-    console.log('📦 localStorage data:', logData);
-    console.log('📊 Total items in localStorage:', logData.length);
+    // Ambil data log dari dashboardHistoriSepekan (7 hari + hari ini) ATAU dailyLogTeknisi (hari ini baru)
+    let logData = JSON.parse(localStorage.getItem('dashboardHistoriSepekan')) || [];
+    const dailyLogData = JSON.parse(localStorage.getItem('dailyLogTeknisi')) || [];
+    
+    // Combine kedua sumber: history + daily log hari ini (daily log punya data lebih fresh)
+    logData = [...logData, ...dailyLogData];
+    
+    console.log('📦 dashboardHistoriSepekan data:', JSON.parse(localStorage.getItem('dashboardHistoriSepekan')) || []);
+    console.log('📦 dailyLogTeknisi data:', dailyLogData);
+    console.log('📊 Total items combined:', logData.length);
     
     // Normalize date to DD/MM/YYYY format (with leading zeros)
     const day = String(selectedDashboardDate.getDate()).padStart(2, '0');
@@ -832,17 +860,19 @@ function populateTaskHistory() {
     
     console.log('📅 Selected date:', selectedDateStr);
     
-    // Filter: match selected date, exclude ISTIRAHAT, non-empty
+    // Filter: match selected date, exclude ISTIRAHAT, only completed tasks (jamSelesai valid)
     const filteredData = logData.filter(item => {
         const isIstirahat = item.tipe === 'ISTIRAHAT';
         const hasNoDate = !item.tanggal;
         const dateMatch = item.tanggal === selectedDateStr;
+        const hasValidJamSelesai = item.jamSelesai && item.jamSelesai !== '-' && item.jamSelesai.trim() !== '';
         
-        console.log(`  Checking: ${item.namaKlien || 'Unknown'} | Tipe: ${item.tipe} | Date: ${item.tanggal} | Match: ${dateMatch}`);
+        console.log(`  Checking: ${item.namaKlien || 'Unknown'} | Tipe: ${item.tipe} | Date: ${item.tanggal} | JamSelesai: ${item.jamSelesai} | Match: ${dateMatch && hasValidJamSelesai}`);
         
         if (item.tipe === 'ISTIRAHAT') return false;
         if (!item.tanggal) return false;
-        return item.tanggal === selectedDateStr;
+        if (!dateMatch) return false;
+        return hasValidJamSelesai;
     });
     
     console.log('✅ Filtered data:', filteredData);
@@ -862,23 +892,20 @@ function populateTaskHistory() {
         const itemDiv = document.createElement('div');
         itemDiv.className = 'task-history-item';
         
-        // Use jamSelesai for time display
-        const waktuDisplay = item.jamSelesai || item.jamSampai || '--:--';
-        const status = item.jamSelesai ? 'Selesai' : item.jamSampai ? 'Dalam Proses' : 'Mulai';
-        const statusColor = item.jamSelesai ? '#40c057' : '#f59f00';
-        
         itemDiv.innerHTML = `
-            <div class="task-history-header">
-                <span class="task-time">${waktuDisplay}</span>
-                <span class="task-status" style="background: ${item.jamSelesai ? '#d3f9d8' : '#fff3bf'}; color: ${statusColor};">${status}</span>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 12px;">
+                <div class="task-history-row" style="margin: 0;">
+                    <i class="fa-solid fa-briefcase"></i>
+                    <span style="font-weight: 600;">${item.namaKlien || 'Unknown'}</span>
+                </div>
+                <div class="task-history-row" style="margin: 0;">
+                    <i class="fa-solid fa-location-dot"></i>
+                    <span class="task-location">${item.alamatKlien || 'Unknown'}</span>
+                </div>
             </div>
-            <div class="task-history-row">
-                <i class="fa-solid fa-briefcase"></i>
-                <span>${item.namaKlien || 'Unknown'}</span>
-            </div>
-            <div class="task-history-row">
-                <i class="fa-solid fa-location-dot"></i>
-                <span class="task-location">${item.detail || 'Unknown'}</span>
+            <div class="task-history-row" style="margin: 0; padding-top: 12px; border-top: 1px solid var(--border);">
+                <i class="fa-solid fa-list"></i>
+                <span style="color: var(--text-muted);">${item.detail || 'Tidak ada detail'}</span>
             </div>
         `;
         
@@ -889,13 +916,119 @@ function populateTaskHistory() {
     console.log('✅ populateTaskHistory() completed');
 }
 
+// ===============================================
+// FUNGSI MODAL KENDALA (TUGAS BERMASALAH)
+// ===============================================
+function openKendalaModal() {
+    console.log('🔓 openKendalaModal() called');
+    const modal = document.getElementById('modalKendalaList');
+    modal.style.display = 'flex';
+    console.log('📋 Kendala modal displayed');
+    populateKendalaList();
+}
+
+function closeKendalaModal() {
+    console.log('🔒 closeKendalaModal() called');
+    const modal = document.getElementById('modalKendalaList');
+    modal.style.display = 'none';
+}
+
+function populateKendalaList() {
+    const kendalaList = document.getElementById('kendalaListContainer');
+    
+    console.log('📖 populateKendalaList() called');
+    
+    // Ambil data log dari dailyLogTeknisi (hanya hari ini dengan kendala)
+    const logData = JSON.parse(localStorage.getItem('dailyLogTeknisi')) || [];
+    console.log('📦 dailyLogTeknisi data:', logData);
+    console.log('📊 Total items in dailyLogTeknisi:', logData.length);
+    
+    // Normalize date to DD/MM/YYYY format (with leading zeros)
+    const day = String(selectedDashboardDate.getDate()).padStart(2, '0');
+    const month = String(selectedDashboardDate.getMonth() + 1).padStart(2, '0');
+    const year = selectedDashboardDate.getFullYear();
+    const selectedDateStr = `${day}/${month}/${year}`;
+    
+    console.log('📅 Selected date:', selectedDateStr);
+    
+    // Filter: match selected date, exclude ISTIRAHAT, non-empty kendala
+    const filteredData = logData.filter(item => {
+        const isIstirahat = item.tipe === 'ISTIRAHAT';
+        const hasNoDate = !item.tanggal;
+        const dateMatch = item.tanggal === selectedDateStr;
+        const hasKendala = item.kendala && item.kendala.trim() !== '' && item.kendala.trim() !== '-';
+        
+        console.log(`  Checking: ${item.namaKlien || 'Unknown'} | Tipe: ${item.tipe} | Date: ${item.tanggal} | Kendala: ${item.kendala} | Match: ${dateMatch && hasKendala}`);
+        
+        if (item.tipe === 'ISTIRAHAT') return false;
+        if (!item.tanggal) return false;
+        return item.tanggal === selectedDateStr && hasKendala;
+    });
+    
+    console.log('✅ Filtered kendala data:', filteredData);
+    console.log('📊 Filtered count:', filteredData.length);
+    
+    if (filteredData.length === 0) {
+        console.log('⚠️ No kendala for selected date');
+        kendalaList.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: var(--text-muted);"><p><i class="fa-solid fa-check-circle" style="font-size: 32px; margin-bottom: 10px; display: block; opacity: 0.3;"></i>Tidak ada tugas bermasalah pada tanggal ini</p></div>';
+        return;
+    }
+    
+    kendalaList.innerHTML = '';
+    
+    filteredData.forEach((item, idx) => {
+        console.log(`🎯 Creating kendala item ${idx}:`, item);
+        
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'task-history-item';
+        
+        // Use jamSelesai for time display
+        const waktuDisplay = item.jamSelesai || item.jamSampai || '--:--';
+        
+        itemDiv.innerHTML = `
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 12px;">
+                <div class="task-history-row" style="margin: 0;">
+                    <i class="fa-solid fa-briefcase"></i>
+                    <span style="font-weight: 600;">${item.namaKlien || 'Unknown'}</span>
+                </div>
+                <div class="task-history-row" style="margin: 0;">
+                    <i class="fa-solid fa-location-dot"></i>
+                    <span class="task-location">${item.alamatKlien || 'Unknown'}</span>
+                </div>
+            </div>
+            <div class="task-history-row" style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border);">
+                <i class="fa-solid fa-list"></i>
+                <span style="color: var(--text-muted);">${item.detail || 'Tidak ada detail'}</span>
+            </div>
+            <div class="task-history-row" style="margin: 0;">
+                <i class="fa-solid fa-exclamation" style="color: var(--primary);"></i>
+                <span style="color: var(--primary); font-weight: 600;">${item.kendala}</span>
+            </div>
+        `;
+        
+        kendalaList.appendChild(itemDiv);
+        console.log(`✅ Kendala item ${idx} added to DOM`);
+    });
+    
+    console.log('✅ populateKendalaList() completed');
+}
+
 // Close modal when clicking outside
 document.addEventListener('DOMContentLoaded', function() {
-    const modal = document.getElementById('modalTaskHistory');
-    if (modal) {
-        modal.addEventListener('click', function(e) {
-            if (e.target === modal) {
+    const modalTaskHistory = document.getElementById('modalTaskHistory');
+    if (modalTaskHistory) {
+        modalTaskHistory.addEventListener('click', function(e) {
+            if (e.target === modalTaskHistory) {
                 closeTaskHistoryModal();
+            }
+        });
+    }
+    
+    const modalKendala = document.getElementById('modalKendalaList');
+    if (modalKendala) {
+        modalKendala.addEventListener('click', function(e) {
+            if (e.target === modalKendala) {
+                closeKendalaModal();
             }
         });
     }
@@ -1437,7 +1570,7 @@ function batalTiket() {
         localStorage.removeItem('tiketTugasAktif'); 
         currentState = 'BERANGKAT'; 
         aktifTaskId = aktifWaktuBerangkat = aktifWaktuSampai = aktifNamaKlien = aktifAlamatKlien = '';
-        document.getElementById('namaCustomer').value = document.getElementById('alamatCustomer').value = document.getElementById('detailKunjungan').value = document.getElementById('kendalaKunjungan').value = '';
+        document.getElementById('namaCustomer').value = document.getElementById('alamatCustomer').value = document.getElementById('detailKunjungan').value = document.getElementById('kendalaKunjungan').value = ''; document.getElementById('tipeKendala').value = '';
         renderUIBerdasarkanState();
     }
 }
@@ -1461,7 +1594,20 @@ function renderUIBerdasarkanState() {
 // FUNGSI PENGIRIMAN DATA FINAL
 // ==============================================
 function simpanDataFinalKunjungan() {
-    const payloadTugas = { action: 'update_selesai', taskId: aktifTaskId, jamBerangkat: aktifWaktuBerangkat, jamSampai: aktifWaktuSampai, jamSelesai: getWaktuSekarang(), tipe: 'Kunjungan', namaKlien: aktifNamaKlien, alamatKlien: aktifAlamatKlien, detail: document.getElementById('detailKunjungan').value, kendala: document.getElementById('kendalaKunjungan').value };
+    // Combine kendala: tipeKendala + kendalaKunjungan
+    const tipeKendala = document.getElementById('tipeKendala').value;
+    const detailKendala = document.getElementById('kendalaKunjungan').value.trim();
+    let kendalaGabung = '';
+    
+    if (tipeKendala && detailKendala) {
+        kendalaGabung = `${tipeKendala} - ${detailKendala}`;
+    } else if (tipeKendala) {
+        kendalaGabung = tipeKendala;
+    } else if (detailKendala) {
+        kendalaGabung = detailKendala;
+    }
+    
+    const payloadTugas = { action: 'update_selesai', taskId: aktifTaskId, jamBerangkat: aktifWaktuBerangkat, jamSampai: aktifWaktuSampai, jamSelesai: getWaktuSekarang(), tipe: 'Kunjungan', namaKlien: aktifNamaKlien, alamatKlien: aktifAlamatKlien, detail: document.getElementById('detailKunjungan').value, kendala: kendalaGabung };
     mintaGPSDanSimpan(payloadTugas);
 }
 
@@ -1494,7 +1640,7 @@ function eksekusiSimpanGPS(gps, payload) {
     let antrean = JSON.parse(localStorage.getItem('antreanLog')) || []; antrean.push(dataBaru); localStorage.setItem('antreanLog', JSON.stringify(antrean));
     
     if (payload.tipe === 'Kunjungan') {
-        localStorage.removeItem('tiketTugasAktif'); document.getElementById('namaCustomer').value = document.getElementById('alamatCustomer').value = document.getElementById('detailKunjungan').value = document.getElementById('kendalaKunjungan').value = ''; 
+        localStorage.removeItem('tiketTugasAktif'); document.getElementById('namaCustomer').value = document.getElementById('alamatCustomer').value = document.getElementById('detailKunjungan').value = document.getElementById('kendalaKunjungan').value = ''; document.getElementById('tipeKendala').value = '';
         currentState = 'BERANGKAT'; aktifTaskId = ''; sliderContainer.classList.remove('disabled'); renderUIBerdasarkanState();
     } else {
         document.getElementById('jamMulaiInternal').value = document.getElementById('jamSelesaiInternal').value = document.getElementById('detailInternal').value = document.getElementById('kendalaInternal').value = ''; 
