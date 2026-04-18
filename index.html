@@ -10,6 +10,7 @@
         <link rel="apple-touch-icon" href="icon.png">
         <link rel="manifest" href="manifest.json">
         <meta name="theme-color" content="#d92534">
+        <meta name="mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
         <meta name="apple-mobile-web-app-title" content="Daily Log">
@@ -79,6 +80,16 @@
                 <button class="btn-primary" onclick="konfirmasiModalBulanan()" style="margin-top: 0;"><i class="fa-solid fa-check"></i> OK, SIMPAN</button>
             </div>
         </div>
+
+        <div id="modalSyncData" class="modal-overlay" style="z-index: 3500;">
+            <div class="modal-content" style="text-align: center; background: transparent; box-shadow: none; border: none; padding: 0;">
+                <div style="background: var(--surface); padding: 40px 30px; border-radius: 12px; display: inline-block; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+                    <i class="fa-solid fa-cloud-arrow-down fa-bounce" style="font-size: 48px; color: var(--primary); margin-bottom: 15px;"></i>
+                    <h3 style="margin: 0 0 10px 0; border: none; color: var(--text-main); font-size: 18px;">Sinkronisasi Data</h3>
+                    <p style="margin: 0; font-size: 13px; color: var(--text-muted); font-weight: 600; line-height: 1.5;">Mengunduh history dan data teknisi...<br>Jangan tutup atau ubah halaman.</p>
+                </div>
+            </div>
+        </div>
         
         <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
         <div class="sidebar" id="sidebarMenu">
@@ -88,7 +99,12 @@
             </div>
             <div class="sidebar-content">
                 <label>Nama Teknisi</label>
-                <input type="text" id="nama" placeholder="Nama Anda..." oninput="simpanNama()">
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" id="nama" placeholder="Nama Anda..." style="flex: 1;">
+                    <button id="btnSaveAndSync" class="btn-sync-data" onclick="simpanNamaDanSync()" title="Simpan Nama & Sinkronisasi Data">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                    </button>
+                </div>
                 
                 <label>Tanggal</label>
                 <input type="text" id="tanggal" readonly style="color: var(--text-muted); background: #f8f9fa;">
@@ -198,44 +214,102 @@
             </div>
             
             <div id="tab-dashboard" class="content">
-                <h3>Ringkasan Kinerja</h3>
-                <p style="font-size: 13px; color: var(--text-muted); margin-top: -5px; margin-bottom: 20px;">
-                    Statistik data pengerjaan mingguan kamu akan muncul di sini.
-                </p>
-                
-                <div class="grid-2">
-                    <div class="dash-card">
-                        <h4>Tugas Selesai</h4>
-                        <p class="val">0</p>
-                    </div>
-                    <div class="dash-card">
-                        <h4>Kendala</h4>
-                        <p class="val" style="color: #f59f00;">0</p>
+                <!-- Inner Tabs: Hari / Minggu -->
+                <div class="dashboard-inner-tabs">
+                    <button class="dashboard-tab-btn active" onclick="switchDashboardTab('hari')" id="tab-hari-btn">
+                        Hari
+                    </button>
+                    <button class="dashboard-tab-btn" onclick="switchDashboardTab('minggu')" id="tab-minggu-btn">
+                        Minggu
+                    </button>
+                </div>
+
+                <!-- Horizontal Date Picker -->
+                <div class="date-picker-container">
+                    <div class="date-pills" id="datePillsContainer">
+                        <!-- Date pills akan di-generate oleh JavaScript -->
                     </div>
                 </div>
-                
-                <div class="dash-card" style="text-align: left;">
-                    <h4>Area Terbanyak Minggu Ini</h4>
-                    <p style="font-size: 14px; font-weight: 600; margin: 10px 0 0 0; color: var(--text-main);">- Belum ada data -</p>
+
+                <!-- Main Metric Area (Hari View) -->
+                <div id="dashboard-hari-view" class="dashboard-view active">
+                    <div class="metric-area">
+                        <h4 class="metric-title">Total Tugas Selesai</h4>
+                        <div class="metric-value" id="metricValueTugasSelesai">0</div>
+                        <a href="javascript:void(0)" class="history-link" onclick="openTaskHistoryModal()">
+                            <i class="fa-solid fa-history"></i> Lihat Riwayat Tugas
+                        </a>
+                    </div>
+                    
+                    <!-- Weekly Bar Chart (on Hari view) -->
+                    <div class="bar-chart-container" style="margin-top: 10px;">
+                        <canvas id="dailyBarChart" width="90%" height="180"></canvas>
+                    </div>
+                </div>
+
+                <!-- Weekly Bar Chart (Minggu View) -->
+                <div id="dashboard-minggu-view" class="dashboard-view">
+                    <h4 style="margin-bottom: 20px; text-align: center;">Jumlah Tugas Per Hari (Target: 5/hari)</h4>
+                    <div class="bar-chart-container">
+                        <div class="bar-chart">
+                            <!-- Populated dynamically by populateWeeklyChart() -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal: Task History -->
+            <div id="modalTaskHistory" class="modal-overlay">
+                <div class="modal-content">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 15px;">
+                        <h3 style="margin: 0; border: none; padding: 0; color: var(--primary);">
+                            <i class="fa-solid fa-history"></i> Riwayat Tugas
+                        </h3>
+                        <button class="btn-close-modal" onclick="closeTaskHistoryModal()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted);"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div id="taskHistoryList" class="task-history-list">
+                        <!-- Task history items akan di-generate oleh JavaScript -->
+                        <div class="task-history-item">
+                            <div class="task-history-header">
+                                <span class="task-time">09:30</span>
+                                <span class="task-status">Selesai</span>
+                            </div>
+                            <div class="task-history-row">
+                                <i class="fa-solid fa-utensils"></i>
+                                <span>PT. Sumber Jaya</span>
+                            </div>
+                            <div class="task-history-row">
+                                <i class="fa-solid fa-location-dot"></i>
+                                <span class="task-location">Jl. Merdeka No. 45, Jakarta Pusat</span>
+                            </div>
+                        </div>
+                        <div class="task-history-item">
+                            <div class="task-history-header">
+                                <span class="task-time">14:15</span>
+                                <span class="task-status">Selesai</span>
+                            </div>
+                            <div class="task-history-row">
+                                <i class="fa-solid fa-utensils"></i>
+                                <span>CV. Maju Jaya</span>
+                            </div>
+                            <div class="task-history-row">
+                                <i class="fa-solid fa-location-dot"></i>
+                                <span class="task-location">Jl. Ahmad Yani No. 12, Bandung</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
             <div id="tab-tim" class="content">
-                <h3>Aktivitas Rekan Tim</h3>
-                <p style="font-size: 13px; color: var(--text-muted); margin-top: -5px; margin-bottom: 20px;">
-                    Pilih nama teknisi untuk melihat aktivitas mereka hari ini.
-                </p>
-                <label>Pilih Teknisi</label>
-                <div style="display: flex; gap: 10px;">
-                    <select id="pilihTeknisiTim" style="flex: 1; font-weight: 600; padding: 10px; border: 1px solid var(--border); border-radius: 6px;">
-                        <option value="">-- Muat Daftar Teknisi --</option>
-                    </select>
-                    <button class="btn-time" onclick="muatDaftarTeknisi()" id="btnRefreshTeknisi" style="padding: 0 15px; font-size: 14px;"><i class="fa-solid fa-rotate"></i></button>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0;">Aktivitas Rekan Tim</h3>
+                    <button class="btn-time" onclick="muatDaftarTeknisiAccordion()" id="btnSyncTeknisi" style="padding: 6px 12px; font-size: 13px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer;"><i class="fa-solid fa-rotate"></i> Sync</button>
                 </div>
-                <button class="btn-outline-primary" onclick="lihatLogTim()" id="btnLihatLogTim" style="margin-top: 15px;">
-                    <i class="fa-solid fa-magnifying-glass"></i> Lihat Pekerjaan
-                </button>
-                <ul class="timeline" id="listLogTim"></ul>
+                <p style="font-size: 13px; color: var(--text-muted); margin-top: 5px; margin-bottom: 20px;">
+                    Klik nama untuk melihat aktivitas mereka hari ini.
+                </p>
+                <div id="daftarTeknisiAccordion" class="accordion-container"></div>
             </div>
             
         </div>

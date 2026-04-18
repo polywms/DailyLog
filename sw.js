@@ -1,5 +1,5 @@
 // UBAH NAMA INI SETIAP KALI ADA UPDATE FITUR BARU!
-const CACHE_NAME = 'artemis-log-v146'; 
+const CACHE_NAME = 'artemis-log-v147'; 
 
 const urlsToCache = [
     './',
@@ -29,6 +29,15 @@ self.addEventListener('activate', event => {
                 cacheNames.map(cacheName => {
                     if (cacheName !== CACHE_NAME) {
                         console.log('Menghapus cache lama:', cacheName);
+                        // New version detected!
+                        self.clients.matchAll().then(clients => {
+                            clients.forEach(client => {
+                                client.postMessage({
+                                    type: 'APP_UPDATED',
+                                    message: 'Versi terbaru aplikasi tersedia'
+                                });
+                            });
+                        });
                         return caches.delete(cacheName);
                     }
                 })
@@ -42,6 +51,9 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
     // Jangan cache request ke Google Script (API)
     if (event.request.url.includes('script.google.com')) return;
+    
+    // Jangan cache non-HTTP(S) schemes (chrome-extension, etc)
+    if (!event.request.url.startsWith('http')) return;
 
     event.respondWith(
         fetch(event.request)

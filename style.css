@@ -73,6 +73,10 @@
         .sidebar-header { padding: 20px; background: var(--primary); color: white; display: flex; justify-content: space-between; align-items: center; }
         .sidebar-header h3 { margin: 0; color: white; border: none; padding: 0; font-size: 18px;}
         .btn-close-sidebar { background: none; border: none; color: white; font-size: 20px; cursor: pointer; padding: 5px; }
+        .btn-sync-data { background: var(--primary); border: none; color: white; font-size: 16px; cursor: pointer; padding: 12px 14px; border-radius: 6px; transition: 0.2s; display: flex; align-items: center; justify-content: center; height: 44px; width: 44px; box-shadow: 0 2px 4px rgba(217, 37, 52, 0.2); }
+        .btn-sync-data:hover { background: var(--primary-dark); }
+        .btn-sync-data:active { transform: scale(0.95); }
+        .btn-sync-data:disabled { opacity: 0.6; cursor: not-allowed; }
         .sidebar-content { padding: 20px; overflow-y: auto; flex: 1; }
 
         /* --- STYLE UNTUK SLIDER --- */
@@ -128,6 +132,7 @@ body.dark-mode .tabs, body.dark-mode .radio-toggle, body.dark-mode .timeline li 
     background: #181818;
 }
 body.dark-mode .btn-time { background: #2d2d2d; color: var(--text-main); border-color: var(--border); }
+body.dark-mode .btn-sync-data { background: var(--primary); box-shadow: 0 2px 4px rgba(217, 37, 52, 0.3); }
 body.dark-mode .dash-card { background: #1e1e1e; border-color: var(--border); }
 body.dark-mode #tiketPerjalanan { background: #1a2634; border-left-color: #339af0; }
 body.dark-mode #tiketPerjalanan h4 { color: #74c0fc; }
@@ -137,3 +142,451 @@ body.dark-mode .slider-container.state-berangkat { background-color: #339af0; }
 body.dark-mode .slider-container.state-sampai { background-color: #f59f00; }
 body.dark-mode .slider-container.state-selesai { background-color: #40c057; }
 body.dark-mode .slider-thumb { background-color: #444; }
+
+/* ===============================================
+   DASHBOARD - INNER TABS (Hari / Minggu)
+   =============================================== */
+.dashboard-inner-tabs {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 0;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 0;
+}
+.dashboard-tab-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-weight: 700;
+    font-size: 14px;
+    padding: 12px 0 12px 0;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: 0.2s ease;
+    outline: none;
+}
+.dashboard-tab-btn.active {
+    color: var(--text-main);
+    border-bottom-color: var(--primary);
+}
+
+/* ===============================================
+   HORIZONTAL DATE PICKER
+   =============================================== */
+.date-picker-container {
+    margin-bottom: 15px;
+    overflow: hidden;
+    -webkit-overflow-scrolling: touch;
+}
+.date-pills {
+    display: flex;
+    gap: 4px;
+    padding-bottom: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.date-pill {
+    flex-shrink: 0;
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: #f8f9fa;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+.date-pill:hover {
+    border-color: var(--primary);
+    transform: scale(1.05);
+}
+.date-pill.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(217, 37, 52, 0.3);
+}
+
+body.dark-mode .date-pill {
+    background: #2d2d2d;
+    color: var(--text-muted);
+}
+body.dark-mode .date-pill.active {
+    background: var(--primary);
+    color: white;
+}
+
+/* ===============================================
+   METRIC AREA
+   =============================================== */
+.metric-area {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 20px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+.metric-title {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.metric-value {
+    font-size: 40px;
+    font-weight: 700;
+    color: var(--primary);
+    margin: 5px 0;
+    line-height: 1;
+}
+.history-link {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-decoration: none;
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: 6px;
+    transition: 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    justify-content: center;
+}
+.history-link:hover {
+    background: #f8f9fa;
+    color: var(--primary);
+}
+.history-link:active {
+    transform: scale(0.97);
+}
+
+body.dark-mode .metric-area {
+    background: #1e1e1e;
+    border-color: var(--border);
+}
+body.dark-mode .history-link:hover {
+    background: #2d2d2d;
+}
+
+/* ===============================================
+   DASHBOARD VIEWS (Show/Hide)
+   =============================================== */
+.dashboard-view {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+.dashboard-view.active {
+    display: block;
+}
+
+/* ===============================================
+   BAR CHART (Weekly View)
+   =============================================== */
+.bar-chart-container {
+    margin-top: 5px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+body.dark-mode .bar-chart-container {
+    background: #2d2d2d;
+}
+
+.bar-chart {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-around;
+    height: 120px;
+    gap: 6px;
+}
+.bar-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    gap: 8px;
+}
+.bar-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    order: 1;
+}
+.bar-wrapper {
+    width: 100%;
+    height: 100px;
+    background: #e9ecef;
+    border-radius: 6px 6px 0 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    order: 2;
+}
+.bar {
+    width: 70%;
+    background: linear-gradient(to top, var(--primary), #ff6b7a);
+    border-radius: 4px 4px 0 0;
+    min-height: 4px;
+    transition: height 0.3s ease;
+}
+
+.bar.success {
+    background: linear-gradient(to top, #40c057, #51cf66);
+}
+
+.bar.warning {
+    background: linear-gradient(to top, #f59f00, #ffa94d);
+}
+
+.bar.empty {
+    background: linear-gradient(to top, #adb5bd, #dee2e6);
+}
+
+.target-line {
+    transition: bottom 0.3s ease;
+}
+.bar-value {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-main);
+    order: 3;
+}
+
+body.dark-mode .bar-wrapper {
+    background: #444;
+}
+
+/* ===============================================
+   TASK HISTORY MODAL & CARDS
+   =============================================== */
+.task-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    max-height: 70vh;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+.task-history-item {
+    background: #f8f9fa;
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--primary);
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+}
+.task-history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+}
+.task-time {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+.task-status {
+    font-size: 12px;
+    font-weight: 700;
+    color: #40c057;
+    background: #d3f9d8;
+    padding: 4px 10px;
+    border-radius: 12px;
+}
+.task-history-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--text-main);
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+.task-history-row i {
+    color: var(--primary);
+    width: 18px;
+    text-align: center;
+    flex-shrink: 0;
+}
+.task-history-row:last-child {
+    margin-bottom: 0;
+}
+.task-location {
+    color: #48a27d;
+    font-weight: 500;
+}
+
+body.dark-mode .task-history-item {
+    background: #2d2d2d;
+    border-color: #444;
+}
+body.dark-mode .task-status {
+    background: rgba(64, 192, 87, 0.2);
+    color: #7dd87d;
+}
+
+/* ===============================================
+   SCROLLBAR STYLING
+   =============================================== */
+.date-pills::-webkit-scrollbar,
+.task-history-list::-webkit-scrollbar {
+    height: 4px;
+    width: 4px;
+}
+.date-pills::-webkit-scrollbar-track,
+.task-history-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+.date-pills::-webkit-scrollbar-thumb,
+.task-history-list::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 2px;
+}
+.date-pills::-webkit-scrollbar-thumb:hover,
+.task-history-list::-webkit-scrollbar-thumb:hover {
+    background: #999;
+}
+
+body.dark-mode .date-pills::-webkit-scrollbar-thumb {
+    background: #666;
+}
+body.dark-mode .date-pills::-webkit-scrollbar-thumb:hover {
+    background: #888;
+}
+
+/* ===============================================
+   ACCORDION FOR TEAM ACTIVITY
+   =============================================== */
+.accordion-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.accordion-item {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #f8f9fa;
+}
+
+.accordion-header {
+    padding: 15px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background 0.2s;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.accordion-header:hover {
+    background: #f8f9fa;
+}
+
+.accordion-header.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.accordion-icon {
+    transition: transform 0.2s;
+    font-size: 12px;
+}
+
+.accordion-header.active .accordion-icon {
+    transform: rotate(180deg);
+}
+
+.accordion-content {
+    display: none;
+    background: var(--surface);
+}
+
+.accordion-content.active {
+    display: block;
+}
+
+.accordion-content ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    border-top: 1px solid var(--border);
+}
+
+.accordion-content li {
+    padding: 15px;
+    border-left: 4px solid var(--primary);
+    border-radius: 0 6px 6px 0;
+    margin: 0;
+    background: #f8f9fa;
+    position: relative;
+    font-size: 13px;
+    color: var(--text-main);
+    border-bottom: 1px solid var(--border);
+}
+
+.accordion-content li:last-child {
+    border-bottom: none;
+}
+
+.accordion-loading {
+    padding: 15px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.accordion-empty {
+    padding: 15px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-style: italic;
+}
+
+body.dark-mode .accordion-item {
+    background: #2d3748;
+}
+
+body.dark-mode .accordion-header {
+    background: #374151;
+    color: white;
+    border-color: #4b5563;
+}
+
+body.dark-mode .accordion-header:hover {
+    background: #4b5563;
+}
+
+body.dark-mode .accordion-content {
+    background: #2d3748;
+}
+
+body.dark-mode .accordion-content li {
+    background: #374151;
+    border-bottom-color: #4b5563;
+}

@@ -1,6 +1,20 @@
 // ==============================================
 // KONFIGURASI UTAMA
+// DEBUG: Buka DevTools dengan F12 atau Ctrl+Shift+I untuk melihat console logs!
 // ==============================================
+console.log('%c🚀 app.js LOADED!', 'font-size: 16px; color: green; font-weight: bold;');
+console.log('📍 Timestamp:', new Date().toISOString());
+console.log('%c💡 TIP: Buka Console tab di DevTools (F12) untuk melihat debug logs', 'color: orange; font-style: italic;');
+
+// Store startup log in localStorage for debugging if console doesn't work
+try {
+    const startupLog = new Date().toISOString() + ' - app.js loaded successfully';
+    localStorage.setItem('debugStartupTime', startupLog);
+    console.log('✅ Debug log stored in localStorage');
+} catch (e) {
+    console.error('Failed to store debug log:', e);
+}
+
 const scriptURL = 'https://script.google.com/macros/s/AKfycbz26Ut7tFVm-22vNbAGnzSLMe9sak8_usjrwHT5AUoUL6NpnpghfdAEg1D7q0ECvGQg0Q/exec';
 
 const today = new Date();
@@ -17,9 +31,31 @@ let logData = JSON.parse(localStorage.getItem('dailyLogTeknisi')) || [];
 let currentState = 'BERANGKAT', aktifTaskId = '', aktifWaktuBerangkat = '', aktifWaktuSampai = '', aktifNamaKlien = '', aktifAlamatKlien = '';
 let isSyncing = false;
 let isIstirahat = false, jamMulaiIstirahat = '';
+let selectedDashboardDate = new Date(); // Track selected date for dashboard filtering
+
+console.log('✅ Global variables initialized');
+console.log('📅 Today:', formatTanggalCek);
+console.log('🔗 Script URL:', scriptURL);
+
+// Helper: Normalize name to Title Case (case-insensitive matching)
+function normalizeTechnicianName(name) {
+    if (!name) return '';
+    return name
+        .trim()
+        .toLowerCase()
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+}
 
 window.onload = function() {
-    document.getElementById('tanggal').value = formatTanggalUI;
+    console.log('%c📄 window.onload TRIGGERED', 'font-size: 14px; color: blue; font-weight: bold;');
+    console.log('🕐 Onload time:', new Date().toISOString());
+
+    // Set default tanggal hari ini
+    const tanggalHariIni = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+    document.getElementById('tanggal').value = tanggalHariIni;
+    console.log('📅 Tanggal field set to:', tanggalHariIni);
 
     if (localStorage.getItem('logSettingTema') === 'dark') {
         document.body.classList.add('dark-mode');
@@ -31,6 +67,41 @@ window.onload = function() {
     const savedTipe = localStorage.getItem('logSettingTipe') || 'Kunjungan'; 
     if (savedName) document.getElementById('nama').value = savedName;
     document.getElementById(savedTipe === 'Kunjungan' ? 'modeLapangan' : 'modeCS').checked = true;
+    
+    // Auto-sync on app load if technician name exists
+    if (savedName) {
+        console.log('🔄 Auto-syncing on app load for:', savedName);
+        setTimeout(() => {
+            mulaiSyncManual();
+        }, 500);
+    }
+    
+    // Listen for Service Worker updates
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('message', event => {
+            if (event.data.type === 'APP_UPDATED') {
+                console.log('🔄 App update detected!');
+                // Optional: Show update notification
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: var(--primary);
+                    color: white;
+                    padding: 12px 20px;
+                    border-radius: 8px;
+                    z-index: 9999;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                    font-size: 14px;
+                `;
+                notification.textContent = '✅ Versi terbaru sudah siap, refresh untuk melihat';
+                document.body.appendChild(notification);
+                setTimeout(() => notification.remove(), 5000);
+            }
+        });
+    }
     
     terapkanModePenugasan();
     cekModalNamaHarian();
@@ -44,44 +115,794 @@ window.onload = function() {
 // ==============================================
 // FUNGSI TABS, SIDEBAR & PANTAU TIM
 // ==============================================
-function switchTab(tabId) {
+async function switchTab(tabId) {
+    console.log(`%c📑 switchTab CALLED with tabId="${tabId}"`, 'font-size: 12px; color: purple;');
+    
     document.querySelectorAll('.content').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
     document.getElementById(`tab-${tabId}`).classList.add('active');
     document.getElementById(`btn-${tabId}`).classList.add('active');
     
     if (tabId === 'tim') {
-        const select = document.getElementById('pilihTeknisiTim');
-        if (select.options.length <= 1) muatDaftarTeknisi();
+        const container = document.getElementById('daftarTeknisiAccordion');
+        if (container.innerHTML === '') {
+            muatDaftarTeknisiAccordion();
+        }
     }
     
     if (tabId === 'dashboard') {
-        muatDashboardStats();
+        // Reset to today's date and activate today's pill
+        selectedDashboardDate = new Date();
+        console.log('📅 Dashboard opened - activating today\'s pill');
+        generateDatePills();
+        muatHistoriSepekan(); // Load weekly history to local storage
+        await muatDashboardStats();
+        switchDashboardTab('hari'); // Default to daily view
     }
 }
 
 async function muatDashboardStats() {
+    console.log('🔔 [muatDashboardStats] CALLED');
+    
     const namaTeknisi = localStorage.getItem('logSettingNama');
-    if (!namaTeknisi) return;
-    if (!navigator.onLine) return; // Jika offline biarkan nilai dummy / angka lama
+    if (!namaTeknisi) {
+        console.log('❌ [muatDashboardStats] No technician name in localStorage');
+        return;
+    }
+    
+    console.log('📊 [muatDashboardStats] Nama Teknisi:', namaTeknisi);
+    
+    // Count completed tasks from selected date, excluding ISTIRAHAT
+    // Load from BOTH sources: dashboard's weekly history + today's daily log
+    const storageKey = 'dashboardHistoriSepekan';
+    const rawData = localStorage.getItem(storageKey);
+    let logData = JSON.parse(rawData) || [];
+    
+    // TAMBAHAN: Juga include data dari dailyLogTeknisi untuk hari ini
+    const dailyLogRaw = localStorage.getItem('dailyLogTeknisi');
+    const dailyLogData = JSON.parse(dailyLogRaw) || [];
+    console.log(`📊 [muatDashboardStats] dailyLogTeknisi count: ${dailyLogData.length}`);
+    
+    // Normalize date to DD/MM/YYYY format (with leading zeros)
+    const day = String(selectedDashboardDate.getDate()).padStart(2, '0');
+    const month = String(selectedDashboardDate.getMonth() + 1).padStart(2, '0');
+    const year = selectedDashboardDate.getFullYear();
+    const selectedDateStr = `${day}/${month}/${year}`;
+    
+    console.log(`📦 [muatDashboardStats] Storage key: "${storageKey}"`);
+    console.log(`📦 [muatDashboardStats] Weekly history items count: ${logData.length}`);
+    console.log(`📅 [muatDashboardStats] Counting for date: ${selectedDateStr}`);
+    console.log(`📅 [muatDashboardStats] Selected dashboard date:`, selectedDashboardDate);
+    
+    if (logData.length === 0) {
+        console.warn('⚠️ [muatDashboardStats] No data in weekly history! Calling muatHistoriSepekan()...');
+    }
+    
+    const tugasSelesai = logData.filter(item => {
+        const isIstirahat = item.tipe === 'ISTIRAHAT';
+        const noDate = !item.tanggal;
+        const dateMatches = item.tanggal === selectedDateStr;
+        const hasJamSelesai = item.jamSelesai;
+        
+        if (!isIstirahat && !noDate && dateMatches) {
+            console.log(`  ✓ Item matched (history): ${item.namaKlien} | Date: ${item.tanggal} | Selesai: ${item.jamSelesai}`);
+        }
+        
+        if (item.tipe === 'ISTIRAHAT') {
+            if (dateMatches) console.log(`  ⏸️ Skipped ISTIRAHAT for date ${selectedDateStr}`);
+            return false;
+        }
+        if (!item.tanggal) {
+            console.log(`  ❌ No tanggal in item: ${item.namaKlien}`);
+            return false;
+        }
+        if (!dateMatches) {
+            return false;
+        }
+        return !!hasJamSelesai;
+    }).length;
+    
+    // TAMBAHAN: Count dari daily log untuk hari ini juga
+    const tugasSelesaiDaily = dailyLogData.filter(item => {
+        const isIstirahat = item.tipe === 'ISTIRAHAT';
+        const noDate = !item.tanggal;
+        const dateMatches = item.tanggal === selectedDateStr;
+        const hasJamSelesai = item.jamSelesai;
+        
+        if (!isIstirahat && !noDate && dateMatches) {
+            console.log(`  ✓ Item matched (daily): ${item.namaKlien} | Date: ${item.tanggal} | Selesai: ${item.jamSelesai}`);
+        }
+        
+        if (item.tipe === 'ISTIRAHAT') return false;
+        if (!item.tanggal) return false;
+        if (!dateMatches) return false;
+        return !!hasJamSelesai;
+    }).length;
+    
+    // Total dari kedua sumber
+    const tugasSelesaiTotal = tugasSelesai + tugasSelesaiDaily;
+    
+    console.log(`🎯 [muatDashboardStats] Weekly history: ${tugasSelesai} | Daily log: ${tugasSelesaiDaily} | Total: ${tugasSelesaiTotal}`);
+    const metricElement = document.getElementById('metricValueTugasSelesai');
+    metricElement.innerText = tugasSelesaiTotal;
+    
+    // Ubah warna jadi hijau kalau sudah mencapai target (5 tugas)
+    if (tugasSelesaiTotal >= 5) {
+        metricElement.style.color = '#28a745'; // Hijau
+    } else {
+        metricElement.style.color = 'var(--primary)'; // Merah default
+    }
+    console.log(`📤 [muatDashboardStats] Updated metric display with: ${tugasSelesaiTotal} (Color: ${tugasSelesaiTotal >= 5 ? 'GREEN' : 'RED'})`);
+    
+    // Populate daily chart (now shows weekly data with async fetch)
+    console.log('📊 [muatDashboardStats] Calling populateDailyChart()...');
+    await populateDailyChart();
+    console.log('✅ [muatDashboardStats] populateDailyChart() completed');
+    
+    // Generate date pills
+    generateDatePills();
+    console.log('✅ [muatDashboardStats] COMPLETED');
+}
+
+// ===============================================
+// FUNGSI DASHBOARD - TAB SWITCH (Hari / Minggu)
+// ===============================================
+function switchDashboardTab(tab) {
+    // Update tab buttons
+    document.getElementById('tab-hari-btn').classList.remove('active');
+    document.getElementById('tab-minggu-btn').classList.remove('active');
+    
+    if (tab === 'hari') {
+        document.getElementById('tab-hari-btn').classList.add('active');
+        document.getElementById('dashboard-hari-view').classList.add('active');
+        document.getElementById('dashboard-minggu-view').classList.remove('active');
+    } else {
+        document.getElementById('tab-minggu-btn').classList.add('active');
+        document.getElementById('dashboard-minggu-view').classList.add('active');
+        document.getElementById('dashboard-hari-view').classList.remove('active');
+        // Populate weekly chart with real data
+        populateWeeklyChart();
+    }
+}
+
+// ===============================================
+// FUNGSI POPULATE DAILY CHART - Canvas-based Rendering
+// ===============================================
+async function populateDailyChart() {
+    console.log('═══════════════════════════════════════════════');
+    console.log('🎬 populateDailyChart() STARTED');
+    console.log('═══════════════════════════════════════════════');
+    
+    const canvas = document.getElementById('dailyBarChart');
+    if (!canvas) {
+        console.error('❌ FATAL: Canvas element not found!');
+        return;
+    }
+    console.log('✅ Canvas element found:', canvas);
+    
+    const ctx = canvas.getContext('2d');
+    console.log('✅ Canvas context 2d obtained');
+    
+    // Check localStorage
+    const storageKey = 'dashboardHistoriSepekan';
+    const rawData = localStorage.getItem(storageKey);
+    console.log(`📦 Checking localStorage key: "${storageKey}"`);
+    console.log(`📦 Raw storage value:`, rawData ? rawData.substring(0, 200) + '...' : 'NULL');
+    
+    let logData = JSON.parse(rawData) || [];
+    console.log(`📊 Parsed data count: ${logData.length} items`);
+    
+    if (logData.length > 0) {
+        console.log('✅ Data found in localStorage');
+        console.log('📋 First 3 items:', logData.slice(0, 3));
+    } else {
+        console.log('⚠️ No data in localStorage, attempting to fetch from server...');
+        try {
+            await muatHistoriSepekan();
+            logData = JSON.parse(localStorage.getItem(storageKey)) || [];
+            console.log(`📦 After fetch - Data count: ${logData.length} items`);
+            if (logData.length > 0) {
+                console.log('📋 First 3 items after fetch:', logData.slice(0, 3));
+            }
+        } catch (err) {
+            console.error('❌ Fetch failed:', err);
+            return;
+        }
+    }
+    
+    // Get data for last 7 days + today
+    const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+    const today = new Date();
+    const tasksByDay = {};
+    
+    console.log(`📅 Today's date: ${today.toLocaleDateString('id-ID')}`);
+    
+    // Initialize all days (8 days total: today + 7 back)
+    for (let i = 0; i <= 7; i++) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        // Format tanggal dengan konsisten: DD/MM/YYYY (dengan leading zeros)
+        const dayKey = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+        tasksByDay[dayKey] = { count: 0, day: dayNames[date.getDay()], date: date };
+    }
+    
+    console.log(`📅 Days to display (${Object.keys(tasksByDay).length} days):`, Object.keys(tasksByDay).sort());
+    console.log(`📝 Format tanggal yang digunakan: DD/MM/YYYY dengan leading zeros`);
+    
+    // Count all tasks (completed or in progress) for each day
+    let itemsProcessed = 0;
+    let itemsMatched = 0;
+    let itemsSkipped = 0;
+    
+    console.log(`📝 Available keys in tasksByDay:`, Object.keys(tasksByDay).sort());
+    
+    logData.forEach((item, idx) => {
+        itemsProcessed++;
+        if (item.tipe === 'ISTIRAHAT') {
+            console.log(`  ⏸️ [${idx}] Skipped ISTIRAHAT: ${item.tanggal}`);
+            itemsSkipped++;
+            return;
+        }
+        if (!item.tanggal) {
+            console.log(`  ❌ [${idx}] No tanggal field`);
+            itemsSkipped++;
+            return;
+        }
+        if (tasksByDay[item.tanggal]) {
+            tasksByDay[item.tanggal].count++;
+            itemsMatched++;
+            console.log(`  ✓ [${idx}] MATCHED: ${item.tanggal}: "${item.namaKlien}" | Selesai: ${item.jamSelesai}`);
+        } else {
+            console.log(`  ⚠️ [${idx}] NO MATCH: "${item.tanggal}" tidak ada di tasksByDay keys`);
+            itemsSkipped++;
+        }
+    });
+    
+    console.log(`📊 Processing summary: ${itemsProcessed} total | ${itemsMatched} matched | ${itemsSkipped} skipped`);
+    console.log(`📊 Tasks by day:`, tasksByDay);
+    
+    const dates = Object.keys(tasksByDay).sort();
+    const tasksPerDay = dates.map(d => tasksByDay[d].count);
+    const maxTasks = Math.max(...tasksPerDay, 5);
+    const TARGET_PER_DAY = 5;
+    
+    console.log(`📊 Task counts per day: [${tasksPerDay.join(', ')}]`);
+    console.log(`📊 Max tasks: ${maxTasks}, Target per day: ${TARGET_PER_DAY}`);
+    
+    // Get actual canvas dimensions
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = 200;
+    
+    console.log(`🎨 Canvas size: ${canvas.width}px × ${canvas.height}px`);
+    console.log(`🎨 Canvas parent rect:`, rect);
+    
+    // Chart dimensions
+    const padding = 40;
+    const chartWidth = canvas.width - (padding * 2);
+    const chartHeight = canvas.height - padding - 50;
+    const barWidth = chartWidth / dates.length - 5;
+    const targetLineY = padding + chartHeight - (TARGET_PER_DAY / maxTasks) * chartHeight;
+    
+    console.log(`🎨 Chart calculations: padding=${padding}, barWidth=${barWidth}, chartHeight=${chartHeight}`);
+    
+    // Clear canvas
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    console.log('🎨 Canvas cleared');
+    
+    // Draw target line
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(padding, targetLineY);
+    ctx.lineTo(canvas.width - padding, targetLineY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    console.log(`🎨 Target line drawn at Y=${targetLineY}`);
+    
+    // Draw bars and labels
+    let barsDrawn = 0;
+    dates.forEach((dateStr, index) => {
+        const dayData = tasksByDay[dateStr];
+        const x = padding + (index * (barWidth + 5));
+        const barHeight = (dayData.count / maxTasks) * chartHeight;
+        const y = padding + chartHeight - barHeight;
+        
+        // Draw bar
+        if (dayData.count >= TARGET_PER_DAY) {
+            ctx.fillStyle = '#28a745'; // Green - success
+        } else if (dayData.count > 0) {
+            ctx.fillStyle = '#d92534'; // Red - warning
+        } else {
+            ctx.fillStyle = '#e9ecef'; // Gray - empty
+        }
+        ctx.fillRect(x, y, barWidth, barHeight);
+        
+        // Draw border
+        ctx.strokeStyle = '#ddd';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, y, barWidth, barHeight);
+        
+        // Draw day label (e.g., "Sab")
+        ctx.fillStyle = '#666';
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(dayData.day, x + barWidth / 2, canvas.height - 3);
+        
+        // Draw date label (e.g., "18")
+        const dateNum = dateStr.split('/')[0]; // Extract DD from DD/MM/YYYY
+        ctx.fillStyle = '#999';
+        ctx.font = '10px Arial';
+        ctx.fillText(dateNum, x + barWidth / 2, canvas.height - 25);
+        
+        // Draw count label on top of bar
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 11px Arial';
+        ctx.fillText(dayData.count, x + barWidth / 2, y - 5);
+        
+        console.log(`  🎨 Bar[${index}] ${dayData.day} ${dateNum} (${dateStr}): count=${dayData.count}, color=${dayData.count >= TARGET_PER_DAY ? 'GREEN' : dayData.count > 0 ? 'ORANGE' : 'GRAY'}`);
+        barsDrawn++;
+    });
+    
+    console.log(`✅ Chart complete! ${barsDrawn} bars drawn`);
+    console.log('═══════════════════════════════════════════════');
+}
+
+// ===============================================
+// FUNGSI POPULATE WEEKLY CHART - Real Data
+// ===============================================
+async function populateWeeklyChart() {
+    const barChart = document.querySelector('.bar-chart');
+    let logData = JSON.parse(localStorage.getItem('dashboardHistoriSepekan')) || [];
+    
+    console.log('📊 populateWeeklyChart() called');
+    console.log('📦 Initial data in localStorage:', logData.length);
+    
+    // If no data, fetch it first
+    if (logData.length === 0) {
+        console.log('⏳ No data found, fetching from server...');
+        await muatHistoriSepekan();
+        logData = JSON.parse(localStorage.getItem('dashboardHistoriSepekan')) || [];
+        console.log('📦 Data after fetch:', logData.length);
+    }
+    
+    // Get data for last 7 days + today
+    const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+    const today = new Date();
+    const tasksByDay = {};
+    
+    // Initialize all days (8 days total: today + 7 back)
+    for (let i = 0; i <= 7; i++) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const dayKey = date.toLocaleDateString('id-ID');
+        tasksByDay[dayKey] = { count: 0, day: dayNames[date.getDay()], date: date };
+    }
+    
+    console.log('📅 Days initialized:', Object.keys(tasksByDay));
+    
+    // Count all tasks (completed or in progress) for each day - not just jamSelesai
+    logData.forEach(item => {
+        if (item.tipe !== 'ISTIRAHAT' && item.tanggal) {
+            if (tasksByDay[item.tanggal]) {
+                tasksByDay[item.tanggal].count++;
+                console.log(`  ✓ ${item.tanggal}: ${item.namaKlien} (Status: ${item.jamSelesai ? 'Selesai' : 'Ongoing'})`);
+            } else {
+                console.log(`  ⚠️ Date not in range: ${item.tanggal}`);
+            }
+        }
+    });
+    
+    console.log('📊 Tasks by day:', tasksByDay);
+    
+    // Find max value for scaling (target is 5, but allow display up to actual max)
+    const maxTasks = Math.max(...Object.values(tasksByDay).map(d => d.count), 5);
+    const TARGET_PER_DAY = 5;
+    const targetPercentage = (TARGET_PER_DAY / maxTasks) * 100;
+    
+    console.log('🎯 Target per day: 5 | Max tasks: ' + maxTasks + ' | Target height: ' + targetPercentage + '%');
+    
+    // Generate bar chart HTML - show last 7 days in reverse (oldest to newest)
+    const dates = Object.keys(tasksByDay).sort();
+    let chartHTML = '';
+    
+    dates.forEach((dateStr) => {
+        const dayData = tasksByDay[dateStr];
+        const height = (dayData.count / maxTasks) * 100;
+        const status = dayData.count >= TARGET_PER_DAY ? '✓' : dayData.count > 0 ? '!' : '-';
+        const statusClass = dayData.count >= TARGET_PER_DAY ? 'success' : dayData.count > 0 ? 'warning' : 'empty';
+        
+        chartHTML += `
+            <div class="bar-item">
+                <div class="bar-label">${dayData.day}</div>
+                <div class="bar-wrapper" style="position: relative;">
+                    <div class="target-line" style="position: absolute; bottom: ${targetPercentage}%; width: 100%; height: 2px; background: #ddd; z-index: 1;"></div>
+                    <div class="bar ${statusClass}" style="height: ${Math.max(height, 3)}%;"></div>
+                </div>
+                <div class="bar-value" title="${dateStr}">${dayData.count}/${TARGET_PER_DAY}</div>
+            </div>
+        `;
+    });
+    
+    barChart.innerHTML = chartHTML;
+    console.log('✅ Weekly chart populated');
+}
+
+// ===============================================
+// FUNGSI LOAD HISTORY DATA - Weekly (7 days)
+// ===============================================
+async function muatHistoriSepekan() {
+    console.log('═══════════════════════════════════════════════');
+    console.log('🔄 [muatHistoriSepekan] STARTED');
+    console.log('═══════════════════════════════════════════════');
+    
+    const namaTeknisiInput = document.getElementById('nama').value;
+    const namaFromStorage = localStorage.getItem('logSettingNama');
+    const namaRaw = namaTeknisiInput || namaFromStorage;
+    const namaTeknski = normalizeTechnicianName(namaRaw);
+    
+    console.log(`📝 [muatHistoriSepekan] Nama input: "${namaTeknisiInput}"`);
+    console.log(`📝 [muatHistoriSepekan] Nama storage: "${namaFromStorage}"`);
+    console.log(`📝 [muatHistoriSepekan] Nama normalized: "${namaTeknski}"`);
+    console.log(`🌐 [muatHistoriSepekan] Online status: ${navigator.onLine}`);
+    
+    if (!namaTeknski || !navigator.onLine) {
+        console.log(`❌ [muatHistoriSepekan] Sync failed - Name empty: ${!namaTeknski} | Offline: ${!navigator.onLine}`);
+        return;
+    }
 
     try {
+        // Use get_log action to fetch from History_{TechnicianName} sheet
+        const sheetName = "History_" + namaTeknski;
+        const requestBody = { 
+            action: "get_log", 
+            reqNama: sheetName
+        };
+        console.log(`📤 [muatHistoriSepekan] Fetching sheet: "${sheetName}"`);
+        console.log(`📤 [muatHistoriSepekan] Request body:`, requestBody);
+        
         const respon = await fetch(scriptURL, { 
             method: 'POST', 
-            body: JSON.stringify({ action: "get_dashboard_stats", nama: namaTeknisi }), 
+            body: JSON.stringify(requestBody), 
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' } 
+        });
+        
+        console.log(`📥 [muatHistoriSepekan] Response received - Status: ${respon.status} ${respon.statusText}`);
+        
+        const resJson = await respon.json();
+        
+        console.log(`📥 [muatHistoriSepekan] JSON parsed:`, resJson);
+        
+        if (resJson.status === 'success' && resJson.data) {
+            console.log(`✅ [muatHistoriSepekan] API success! Records from API: ${resJson.data.length}`);
+            console.log(`📋 [muatHistoriSepekan] First 3 records:`, resJson.data.slice(0, 3));
+            
+            // Filter data: past 7 days + today, exclude ISTIRAHAT
+            const today = new Date();
+            const sevenDaysAgo = new Date(today);
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            
+            console.log(`📅 [muatHistoriSepekan] Today: ${today.toLocaleDateString('id-ID')} (${today})`);
+            console.log(`📅 [muatHistoriSepekan] 7 days ago: ${sevenDaysAgo.toLocaleDateString('id-ID')} (${sevenDaysAgo})`);
+            
+            let filterStats = { istirahat: 0, invalidDate: 0, outOfRange: 0, included: 0 };
+            
+            const filteredData = resJson.data.filter(item => {
+                if (item.tipe === 'ISTIRAHAT') {
+                    filterStats.istirahat++;
+                    return false;
+                }
+                
+                // Parse date in id-ID format (DD/MM/YYYY)
+                const dateParts = item.tanggal.split('/');
+                if (dateParts.length !== 3) {
+                    console.log(`❌ [muatHistoriSepekan] Invalid date format: "${item.tanggal}"`);
+                    filterStats.invalidDate++;
+                    return false;
+                }
+                const itemDate = new Date(dateParts[2], dateParts[1] - 1, dateParts[0]);
+                const isInRange = itemDate >= sevenDaysAgo && itemDate <= today;
+                
+                if (!isInRange) {
+                    filterStats.outOfRange++;
+                    return false;
+                }
+                
+                filterStats.included++;
+                return true;
+            });
+            
+            console.log(`📊 [muatHistoriSepekan] Filter stats:`, filterStats);
+            console.log(`✅ [muatHistoriSepekan] Filtered records: ${filteredData.length}`);
+            
+            if (filteredData.length > 0) {
+                console.log(`📋 [muatHistoriSepekan] First filtered item:`, filteredData[0]);
+                console.log(`📋 [muatHistoriSepekan] Last filtered item:`, filteredData[filteredData.length - 1]);
+            }
+            
+            // Store in SEPARATE key to avoid overwriting daily log
+            console.log('💾 [muatHistoriSepekan] Saving to localStorage...');
+            localStorage.setItem('dashboardHistoriSepekan', JSON.stringify(filteredData));
+            localStorage.setItem('lastHistorySync', new Date().toISOString());
+            
+            // Verify save
+            const saved = localStorage.getItem('dashboardHistoriSepekan');
+            const savedCount = JSON.parse(saved || '[]').length;
+            console.log(`✅ [muatHistoriSepekan] Saved successfully! Key: "dashboardHistoriSepekan", Items: ${savedCount}`);
+            console.log(`✅ [muatHistoriSepekan] Last sync timestamp:`, localStorage.getItem('lastHistorySync'));
+            console.log('═══════════════════════════════════════════════');
+            console.log('✅ [muatHistoriSepekan] COMPLETED SUCCESSFULLY');
+            console.log('═══════════════════════════════════════════════');
+        } else {
+            console.log('⚠️ [muatHistoriSepekan] API returned no data or error:', resJson);
+            console.log('═══════════════════════════════════════════════');
+            console.log('❌ [muatHistoriSepekan] FAILED - No data from API');
+            console.log('═══════════════════════════════════════════════');
+        }
+    } catch (err) {
+        console.error("❌ [muatHistoriSepekan] Fetch failed:", err);
+        console.error("   Error name:", err.name);
+        console.error("   Error message:", err.message);
+        console.error("   Error stack:", err.stack);
+        console.log('═══════════════════════════════════════════════');
+        console.log('❌ [muatHistoriSepekan] FAILED - Exception');
+        console.log('═══════════════════════════════════════════════');
+    }
+}
+
+// ===============================================
+// FUNGSI FETCH TODAY'S LOG - Dari sheet teknisi utama
+// ===============================================
+async function muatLogHariIni() {
+    const namaTeknisiInput = document.getElementById('nama').value;
+    const namaFromStorage = localStorage.getItem('logSettingNama');
+    const namaRaw = namaTeknisiInput || namaFromStorage;
+    const namaTeknski = normalizeTechnicianName(namaRaw);
+    
+    console.log('📋 muatLogHariIni() started - Fetching from main sheet');
+    console.log('📝 Nama Teknisi:', namaTeknski);
+    
+    if (!namaTeknski || !navigator.onLine) {
+        console.log('❌ Failed - No name or offline');
+        return;
+    }
+
+    try {
+        // Fetch from main technician sheet (not History_{name})
+        const requestBody = { 
+            action: "get_log", 
+            reqNama: namaTeknski
+        };
+        console.log('📤 Sending request:', requestBody);
+        
+        const respon = await fetch(scriptURL, { 
+            method: 'POST', 
+            body: JSON.stringify(requestBody), 
             headers: { 'Content-Type': 'text/plain;charset=utf-8' } 
         });
         const resJson = await respon.json();
         
-        if (resJson.status === 'success') {
-            document.querySelectorAll('.dash-card .val')[0].innerText = resJson.data.tugasSelesai;
-            document.querySelectorAll('.dash-card .val')[1].innerText = resJson.data.totalKendala;
-            document.querySelector('.dash-card p[style*="font-size: 14px"]').innerText = resJson.data.areaTerbanyak;
+        console.log('📥 API Response:', resJson);
+        
+        if (resJson.status === 'success' && resJson.data) {
+            console.log('📊 Total records from main sheet:', resJson.data.length);
+            
+            // Store today's data from main sheet
+            localStorage.setItem('dailyLogTeknisi', JSON.stringify(resJson.data));
+            logData = resJson.data;
+            
+            console.log('💾 Saved to localStorage - dailyLogTeknisi');
+            console.log('🔄 Refreshing timeline display');
+            tampilkanLog();
+        } else {
+            console.log('⚠️ API returned no data or error:', resJson);
         }
     } catch (err) {
-        console.log("Gagal memuat dashboard", err);
+        console.log("❌ Gagal memuat log hari ini:", err);
     }
 }
+
+// ===============================================
+// FUNGSI DATE PICKER - Generate Pills (Flipped: Today on Right)
+// ===============================================
+function generateDatePills() {
+    const container = document.getElementById('datePillsContainer');
+    container.innerHTML = '';
+    
+    console.log('🔄 generateDatePills() called');
+    
+    // Normalize selectedDashboardDate to DD/MM/YYYY
+    const day = String(selectedDashboardDate.getDate()).padStart(2, '0');
+    const month = String(selectedDashboardDate.getMonth() + 1).padStart(2, '0');
+    const year = selectedDashboardDate.getFullYear();
+    const selectedStr = `${day}/${month}/${year}`;
+    
+    console.log('📅 selectedDashboardDate:', selectedStr);
+    
+    const today = new Date();
+    const datesArray = [];
+    
+    // Collect all dates first (7 days back to today)
+    for (let i = 7; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        datesArray.push(date);
+    }
+    
+    let currentMonth = null;
+    
+    // Generate pills grouped by month
+    datesArray.forEach(date => {
+        const dayNum = date.getDate();
+        const dateMonth = date.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+        
+        // Create month header if month changed
+        if (currentMonth !== dateMonth) {
+            currentMonth = dateMonth;
+            const monthHeader = document.createElement('div');
+            monthHeader.style.cssText = `
+                font-size: 11px;
+                font-weight: 700;
+                color: var(--text-muted);
+                text-align: center;
+                margin-top: 8px;
+                margin-bottom: 6px;
+                width: 100%;
+            `;
+            monthHeader.textContent = dateMonth;
+            container.appendChild(monthHeader);
+        }
+        
+        // Create pill with only date number
+        const pill = document.createElement('div');
+        pill.className = 'date-pill';
+        pill.innerHTML = dayNum;
+        pill.onclick = () => selectDatePill(pill, date);
+        pill.dataset.dateStr = date.toLocaleDateString('id-ID');
+        
+        // Check if this date matches the selected date
+        const dateDay = String(date.getDate()).padStart(2, '0');
+        const dateMonth2 = String(date.getMonth() + 1).padStart(2, '0');
+        const dateYear = date.getFullYear();
+        const dateStr = `${dateDay}/${dateMonth2}/${dateYear}`;
+        
+        if (dateStr === selectedStr) {
+            pill.classList.add('active');
+            console.log('✅ Active pill:', dateStr);
+        }
+        
+        container.appendChild(pill);
+    });
+    
+    console.log('✅ Pills generated');
+}
+
+async function selectDatePill(pillElement, dateObj) {
+    // Normalize to DD/MM/YYYY
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const year = dateObj.getFullYear();
+    const selectedStr = `${day}/${month}/${year}`;
+    
+    console.log('📌 selectDatePill() - Selected:', selectedStr);
+    
+    document.querySelectorAll('.date-pill').forEach(p => p.classList.remove('active'));
+    pillElement.classList.add('active');
+    
+    // Update selected date and refresh metrics
+    selectedDashboardDate = new Date(dateObj);
+    console.log('📅 Updated selectedDashboardDate:', selectedStr);
+    await muatDashboardStats();
+}
+
+// ===============================================
+// FUNGSI TASK HISTORY MODAL
+// ===============================================
+function openTaskHistoryModal() {
+    console.log('🔓 openTaskHistoryModal() called');
+    const modal = document.getElementById('modalTaskHistory');
+    modal.style.display = 'flex';
+    console.log('📋 Modal displayed');
+    populateTaskHistory();
+}
+
+function closeTaskHistoryModal() {
+    console.log('🔒 closeTaskHistoryModal() called');
+    const modal = document.getElementById('modalTaskHistory');
+    modal.style.display = 'none';
+}
+
+function populateTaskHistory() {
+    const historyList = document.getElementById('taskHistoryList');
+    
+    console.log('📖 populateTaskHistory() called');
+    
+    // Ambil data log dari dashboard's weekly history (separate key)
+    const logData = JSON.parse(localStorage.getItem('dashboardHistoriSepekan')) || [];
+    console.log('📦 localStorage data:', logData);
+    console.log('📊 Total items in localStorage:', logData.length);
+    
+    // Normalize date to DD/MM/YYYY format (with leading zeros)
+    const day = String(selectedDashboardDate.getDate()).padStart(2, '0');
+    const month = String(selectedDashboardDate.getMonth() + 1).padStart(2, '0');
+    const year = selectedDashboardDate.getFullYear();
+    const selectedDateStr = `${day}/${month}/${year}`;
+    
+    console.log('📅 Selected date:', selectedDateStr);
+    
+    // Filter: match selected date, exclude ISTIRAHAT, non-empty
+    const filteredData = logData.filter(item => {
+        const isIstirahat = item.tipe === 'ISTIRAHAT';
+        const hasNoDate = !item.tanggal;
+        const dateMatch = item.tanggal === selectedDateStr;
+        
+        console.log(`  Checking: ${item.namaKlien || 'Unknown'} | Tipe: ${item.tipe} | Date: ${item.tanggal} | Match: ${dateMatch}`);
+        
+        if (item.tipe === 'ISTIRAHAT') return false;
+        if (!item.tanggal) return false;
+        return item.tanggal === selectedDateStr;
+    });
+    
+    console.log('✅ Filtered data:', filteredData);
+    console.log('📊 Filtered count:', filteredData.length);
+    
+    if (filteredData.length === 0) {
+        console.log('⚠️ No data for selected date');
+        historyList.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: var(--text-muted);"><p><i class="fa-solid fa-inbox" style="font-size: 32px; margin-bottom: 10px; display: block; opacity: 0.3;"></i>Belum ada riwayat tugas pada tanggal ini</p></div>';
+        return;
+    }
+    
+    historyList.innerHTML = '';
+    
+    filteredData.forEach((item, idx) => {
+        console.log(`🎯 Creating item ${idx}:`, item);
+        
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'task-history-item';
+        
+        // Use jamSelesai for time display
+        const waktuDisplay = item.jamSelesai || item.jamSampai || '--:--';
+        const status = item.jamSelesai ? 'Selesai' : item.jamSampai ? 'Dalam Proses' : 'Mulai';
+        const statusColor = item.jamSelesai ? '#40c057' : '#f59f00';
+        
+        itemDiv.innerHTML = `
+            <div class="task-history-header">
+                <span class="task-time">${waktuDisplay}</span>
+                <span class="task-status" style="background: ${item.jamSelesai ? '#d3f9d8' : '#fff3bf'}; color: ${statusColor};">${status}</span>
+            </div>
+            <div class="task-history-row">
+                <i class="fa-solid fa-briefcase"></i>
+                <span>${item.namaKlien || 'Unknown'}</span>
+            </div>
+            <div class="task-history-row">
+                <i class="fa-solid fa-location-dot"></i>
+                <span class="task-location">${item.detail || 'Unknown'}</span>
+            </div>
+        `;
+        
+        historyList.appendChild(itemDiv);
+        console.log(`✅ Item ${idx} added to DOM`);
+    });
+    
+    console.log('✅ populateTaskHistory() completed');
+}
+
+// Close modal when clicking outside
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('modalTaskHistory');
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                closeTaskHistoryModal();
+            }
+        });
+    }
+    
+    // Initialize date pills on load
+    generateDatePills();
+});
 
 // Fungsi Buka-Tutup Sidebar Pengaturan
 function toggleSidebar() {
@@ -121,7 +942,8 @@ async function muatDaftarTeknisi() {
 
 async function lihatLogTim() {
     if (!navigator.onLine) { alert('Harus online untuk melihat rincian pekerjaan tim!'); return; }
-    const namaReq = document.getElementById('pilihTeknisiTim').value;
+    const namaReqRaw = document.getElementById('pilihTeknisiTim').value;
+    const namaReq = normalizeTechnicianName(namaReqRaw);
     if (!namaReq) { alert('Pilih nama teknisi dari kotak terlebih dahulu!'); return; }
 
     const btn = document.getElementById('btnLihatLogTim');
@@ -147,6 +969,136 @@ async function lihatLogTim() {
         } else { list.innerHTML = `<div class="empty-state">Gagal mengambil log: ${resJson.message}</div>`; }
     } catch (err) { list.innerHTML = `<div class="empty-state">Gagal terhubung ke server. Coba lagi.</div>`; }
     btn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Lihat Pekerjaan'; btn.disabled = false;
+}
+
+// ===============================================
+// ACCORDION TEAM ACTIVITY
+// ===============================================
+let teamDataCache = {}; // Cache untuk menyimpan data teknisi
+
+async function muatDaftarTeknisiAccordion() {
+    console.log('📋 muatDaftarTeknisiAccordion() called');
+    
+    if (!navigator.onLine) { 
+        alert('Harus online untuk mengecek daftar tim!'); 
+        return; 
+    }
+    
+    const btn = document.getElementById('btnSyncTeknisi');
+    const container = document.getElementById('daftarTeknisiAccordion');
+    
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
+    btn.disabled = true;
+    container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted);">Memuat daftar teknisi...</div>';
+
+    try {
+        const respon = await fetch(scriptURL, { 
+            method: 'POST', 
+            body: JSON.stringify({ action: "get_teknisi" }), 
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' } 
+        });
+        const resJson = await respon.json();
+        
+        if(resJson.status === 'success' && resJson.data.length > 0) {
+            console.log('✅ Teknisi loaded:', resJson.data);
+            container.innerHTML = '';
+            teamDataCache = {}; // Reset cache
+            
+            // Create accordion for each teknisi
+            resJson.data.forEach((nama, idx) => {
+                const accordionItem = document.createElement('div');
+                accordionItem.className = 'accordion-item';
+                accordionItem.innerHTML = `
+                    <div class="accordion-header" onclick="toggleAccordion(this, '${nama}')">
+                        <span><i class="fa-solid fa-user-tie" style="margin-right: 10px;"></i>${nama}</span>
+                        <i class="accordion-icon fa-solid fa-chevron-down"></i>
+                    </div>
+                    <div class="accordion-content">
+                        <div class="accordion-loading">
+                            <i class="fa-solid fa-spinner fa-spin"></i> Loading...
+                        </div>
+                    </div>
+                `;
+                container.appendChild(accordionItem);
+            });
+            
+            console.log('✅ Accordion items created');
+        } else {
+            container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted);">Tidak ada data teknisi ditemukan.</div>';
+        }
+    } catch (err) { 
+        console.error('❌ Error loading teknisi:', err);
+        container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-muted);">❌ Gagal terhubung ke server.</div>'; 
+    }
+    
+    btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Sync';
+    btn.disabled = false;
+}
+
+function toggleAccordion(headerEl, namaTeknisi) {
+    console.log('🔄 toggleAccordion called for:', namaTeknisi);
+    
+    headerEl.classList.toggle('active');
+    const contentEl = headerEl.nextElementSibling;
+    contentEl.classList.toggle('active');
+    
+    // If opening and data not cached, load it
+    if (contentEl.classList.contains('active') && !teamDataCache[namaTeknisi]) {
+        loadTeknisiData(namaTeknisi, contentEl);
+    }
+}
+
+async function loadTeknisiData(namaTeknisiRaw, contentEl) {
+    console.log('📥 loadTeknisiData called for:', namaTeknisiRaw);
+    
+    const namaTeknisi = normalizeTechnicianName(namaTeknisiRaw);
+    
+    if (!navigator.onLine) {
+        contentEl.innerHTML = '<div class="accordion-empty">Tidak online. Refresh untuk mencoba lagi.</div>';
+        return;
+    }
+
+    try {
+        const respon = await fetch(scriptURL, { 
+            method: 'POST', 
+            body: JSON.stringify({ action: "get_log", reqNama: namaTeknisi }), 
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' } 
+        });
+        const resJson = await respon.json();
+        
+        if(resJson.status === 'success') {
+            if(resJson.data.length === 0) {
+                contentEl.innerHTML = `<div class="accordion-empty"><b>${namaTeknisi}</b> belum mencatat pekerjaan apapun hari ini.</div>`;
+            } else {
+                let itemsHTML = '';
+                resJson.data.forEach(log => {
+                    let kendalaHTML = log.kendala ? `<div style="color: var(--primary); font-weight: 600; margin-top: 4px;"><i class="fa-solid fa-triangle-exclamation"></i> Kendala: ${log.kendala}</div>` : '';
+                    let titleTampilan = log.namaKlien ? `${log.namaKlien} <span style="font-weight: normal; font-size: 12px; color: var(--text-muted);">| ${log.alamatKlien}</span>` : "-";
+                    let teksJam = log.tipe === 'Kunjungan' || log.jamBerangkat !== '-' ? `Berangkat: ${log.jamBerangkat} | Tiba: ${log.jamSampai} | Selesai: ${log.jamSelesai}` : `Mulai: ${log.jamSampai} | Selesai: ${log.jamSelesai}`;
+                    
+                    itemsHTML += `
+                        <li>
+                            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px;">
+                                <i class="fa-regular fa-clock"></i> ${teksJam}
+                            </div>
+                            <div style="font-weight: 600; margin-bottom: 4px;">${titleTampilan}</div>
+                            <div style="color: var(--text-muted); line-height: 1.4;">${log.detail}</div>
+                            ${kendalaHTML}
+                            <div style="font-size: 11px; color: #adb5bd; margin-top: 8px;"><i class="fa-solid fa-location-dot"></i> ${log.gps}</div>
+                        </li>
+                    `;
+                });
+                
+                contentEl.innerHTML = `<ul>${itemsHTML}</ul>`;
+                teamDataCache[namaTeknisi] = true; // Mark as loaded
+            }
+        } else { 
+            contentEl.innerHTML = `<div class="accordion-empty">Gagal mengambil log: ${resJson.message}</div>`; 
+        }
+    } catch (err) { 
+        console.error('❌ Error loading data:', err);
+        contentEl.innerHTML = `<div class="accordion-empty">❌ Gagal terhubung ke server.</div>`; 
+    }
 }
 
 // ==============================================
@@ -269,7 +1221,32 @@ function pulihkanStatusIstirahat() {
 // ==============================================
 // PENGATURAN MODE
 // ==============================================
-function simpanNama() { localStorage.setItem('logSettingNama', document.getElementById('nama').value); }
+function simpanNama() { 
+    const namaInput = document.getElementById('nama').value;
+    const namaTeknski = normalizeTechnicianName(namaInput);
+    console.log('💾 Saving technician name:', namaInput, '→', namaTeknski);
+    localStorage.setItem('logSettingNama', namaTeknski); 
+}
+
+async function simpanNamaDanSync() {
+    // First save the name
+    simpanNama();
+    
+    // Then clear old daily log data for this technician
+    console.log('🗑️ Clearing old daily log data');
+    localStorage.removeItem('dailyLogTeknisi');
+    logData = [];
+    tampilkanLog(); // Refresh timeline to show empty
+    
+    // Then sync
+    const namaTeknski = localStorage.getItem('logSettingNama');
+    if (!namaTeknski) {
+        alert('Mohon isi nama teknisi terlebih dahulu!');
+        return;
+    }
+    
+    mulaiSyncManual();
+}
 
 function toggleTema() {
     const isDark = document.body.classList.toggle('dark-mode');
@@ -277,6 +1254,94 @@ function toggleTema() {
     updateBtnTemaUI(isDark);
 }
 
+function updateBtnTemaUI(isDark) {
+    const btn = document.getElementById('btnToggleTema');
+    btn.innerHTML = isDark ? '<i class="fa-solid fa-sun"></i> Mode Terang' : '<i class="fa-solid fa-moon"></i> Mode Gelap';
+}
+
+// ===============================================
+// FUNGSI MANUAL SYNC - Dengan Modal
+// ===============================================
+async function mulaiSyncManual() {
+    console.log('═══════════════════════════════════════════════');
+    console.log('🔄 [mulaiSyncManual] SYNC STARTED');
+    console.log('═══════════════════════════════════════════════');
+    
+    const modal = document.getElementById('modalSyncData');
+    const btn = document.getElementById('btnSaveAndSync');
+    const sidebar = document.getElementById('sidebarMenu');
+    const overlay = document.getElementById('sidebarOverlay');
+    
+    // Close sidebar when sync starts
+    if (sidebar) {
+        sidebar.classList.remove('active');
+        console.log('📁 Sidebar closed');
+    }
+    if (overlay) {
+        overlay.style.display = 'none';
+        console.log('📁 Sidebar overlay closed');
+    }
+    
+    modal.style.display = 'flex';
+    btn.disabled = true;
+    console.log('🔄 Sync modal opened');
+    
+    try {
+        console.log('⏳ [Sync Step 1/3] Calling muatHistoriSepekan()...');
+        await muatHistoriSepekan();
+        console.log('✅ [Sync Step 1/3] muatHistoriSepekan() completed');
+        
+        console.log('⏳ [Sync Step 2/3] Calling muatLogHariIni()...');
+        await muatLogHariIni();
+        console.log('✅ [Sync Step 2/3] muatLogHariIni() completed');
+        
+        // Refresh metric count and history modal if open
+        console.log('⏳ [Sync Step 3/3] Refreshing dashboard stats...');
+        await muatDashboardStats();
+        console.log('✅ [Sync Step 3/3] Dashboard stats refreshed');
+        
+        const historyModal = document.getElementById('modalTaskHistory');
+        if (historyModal && historyModal.style.display === 'flex') {
+            console.log('🔄 Task history modal is open, refreshing...');
+            populateTaskHistory();
+        } else {
+            console.log('ℹ️ Task history modal is not open');
+        }
+        
+        // Refresh weekly chart if minggu tab is active
+        const mingguView = document.getElementById('dashboard-minggu-view');
+        if (mingguView && mingguView.classList.contains('active')) {
+            console.log('🔄 Weekly (minggu) view is active, refreshing chart...');
+            populateWeeklyChart();
+        } else {
+            console.log('ℹ️ Weekly view is not active');
+        }
+        
+        // Success - tutup modal setelah 1 detik
+        console.log('═══════════════════════════════════════════════');
+        console.log('✅ [mulaiSyncManual] SYNC COMPLETED SUCCESSFULLY');
+        console.log('═══════════════════════════════════════════════');
+        setTimeout(() => {
+            modal.style.display = 'none';
+            btn.disabled = false;
+            console.log('🔄 Sync modal closed');
+        }, 1000);
+    } catch (err) {
+        // Error - tutup modal dan enable button
+        console.error('═══════════════════════════════════════════════');
+        console.error('❌ [mulaiSyncManual] SYNC FAILED - Exception:');
+        console.error('Error name:', err.name);
+        console.error('Error message:', err.message);
+        console.error('Error stack:', err.stack);
+        console.error('═══════════════════════════════════════════════');
+        modal.style.display = 'none';
+        btn.disabled = false;
+    }
+}
+
+// ===============================================
+// FUNGSI UPDATE TEMA UI
+// ===============================================
 function updateBtnTemaUI(isDark) {
     const btn = document.getElementById('btnToggleTema');
     if (btn) {
