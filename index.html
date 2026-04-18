@@ -132,7 +132,7 @@
             <div class="app-header">
                 <div class="header-title">
                     <i class="fa-solid fa-crosshairs"></i>
-                    <h1>Daily Log Teknisi</h1>
+                    <h1>Daily Log Teknisi <span id="headerTeknisiName" style="color: var(--primary); font-weight: 600;"></span></h1>
                 </div>
                 <div class="header-actions">
                     <button class="btn-menu" id="btnIstirahat" onclick="bukaModalIstirahat()" title="Istirahat"><i class="fa-solid fa-mug-hot"></i></button>
@@ -242,11 +242,11 @@
                 <div id="dashboard-hari-view" class="dashboard-view active">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                         <div class="metric-area" onclick="openTaskHistoryModal()" style="cursor: pointer;">
-                            <h4 class="metric-title">Total Tugas Selesai</h4>
+                            <h4 class="metric-title">Tugas Selesai</h4>
                             <div class="metric-value" id="metricValueTugasSelesai">0</div>
                         </div>
                         <div class="metric-area" onclick="openKendalaModal()" style="cursor: pointer;">
-                            <h4 class="metric-title">Total Kendala</h4>
+                            <h4 class="metric-title">Kendala</h4>
                             <div class="metric-value" id="metricValueKendala">0</div>
                         </div>
                     </div>

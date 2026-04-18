@@ -49,6 +49,119 @@ function normalizeTechnicianName(name) {
         .join(' ');
 }
 
+// Helper: Update header with technician name
+function updateHeaderTeknisiName() {
+    const savedName = localStorage.getItem('logSettingNama');
+    const headerElement = document.getElementById('headerTeknisiName');
+    if (headerElement) {
+        if (savedName) {
+            const firstName = savedName.split(' ')[0]; // Get only first word
+            headerElement.textContent = '- ' + firstName;
+        } else {
+            headerElement.textContent = '';
+        }
+    }
+}
+
+// Helper: Show update notification with refresh button
+function showUpdateNotification() {
+    // Remove any existing update notification
+    const existingNotif = document.getElementById('updateNotificationBanner');
+    if (existingNotif) existingNotif.remove();
+    
+    const banner = document.createElement('div');
+    banner.id = 'updateNotificationBanner';
+    banner.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        padding: 16px 20px;
+        z-index: 10000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 600;
+        animation: slideDown 0.3s ease-out;
+    `;
+    
+    const message = document.createElement('span');
+    message.style.cssText = 'flex: 1; margin-right: 20px; font-size: 14px;';
+    message.innerHTML = '✅ <strong>Versi terbaru tersedia!</strong> Silakan refresh aplikasi untuk mendapatkan update terbaru.';
+    
+    const btnContainer = document.createElement('div');
+    btnContainer.style.cssText = 'display: flex; gap: 10px; white-space: nowrap;';
+    
+    const refreshBtn = document.createElement('button');
+    refreshBtn.textContent = '🔄 Refresh Sekarang';
+    refreshBtn.style.cssText = `
+        background: white;
+        color: #28a745;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.2s;
+    `;
+    refreshBtn.onmouseover = () => refreshBtn.style.transform = 'scale(1.05)';
+    refreshBtn.onmouseout = () => refreshBtn.style.transform = 'scale(1)';
+    refreshBtn.onclick = () => window.location.reload();
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '✕';
+    closeBtn.style.cssText = `
+        background: rgba(255,255,255,0.2);
+        color: white;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: all 0.2s;
+    `;
+    closeBtn.onmouseover = () => closeBtn.style.background = 'rgba(255,255,255,0.3)';
+    closeBtn.onmouseout = () => closeBtn.style.background = 'rgba(255,255,255,0.2)';
+    closeBtn.onclick = () => banner.remove();
+    
+    btnContainer.appendChild(refreshBtn);
+    btnContainer.appendChild(closeBtn);
+    banner.appendChild(message);
+    banner.appendChild(btnContainer);
+    document.body.appendChild(banner);
+    
+    // Add animation styles
+    if (!document.getElementById('updateNotificationStyles')) {
+        const style = document.createElement('style');
+        style.id = 'updateNotificationStyles';
+        style.textContent = `
+            @keyframes slideDown {
+                from {
+                    transform: translateY(-100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateY(0);
+                    opacity: 1;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
+// Helper: Get Monday of the current week
+function getMondayOfCurrentWeek() {
+    const today = new Date();
+    const day = today.getDay();
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1); // Adjust to get Monday
+    return new Date(today.setDate(diff));
+}
+
 window.onload = function() {
     console.log('%c📄 window.onload TRIGGERED', 'font-size: 14px; color: blue; font-weight: bold;');
     console.log('🕐 Onload time:', new Date().toISOString());
@@ -68,6 +181,7 @@ window.onload = function() {
     const savedTipe = localStorage.getItem('logSettingTipe') || 'Kunjungan'; 
     if (savedName) document.getElementById('nama').value = savedName;
     document.getElementById(savedTipe === 'Kunjungan' ? 'modeLapangan' : 'modeCS').checked = true;
+    updateHeaderTeknisiName(); // Update header with technician name
     
     // Auto-sync on app load if technician name exists
     if (savedName) {
@@ -82,24 +196,7 @@ window.onload = function() {
         navigator.serviceWorker.addEventListener('message', event => {
             if (event.data.type === 'APP_UPDATED') {
                 console.log('🔄 App update detected!');
-                // Optional: Show update notification
-                const notification = document.createElement('div');
-                notification.style.cssText = `
-                    position: fixed;
-                    top: 20px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    background: var(--primary);
-                    color: white;
-                    padding: 12px 20px;
-                    border-radius: 8px;
-                    z-index: 9999;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-                    font-size: 14px;
-                `;
-                notification.textContent = '✅ Versi terbaru sudah siap, refresh untuk melihat';
-                document.body.appendChild(notification);
-                setTimeout(() => notification.remove(), 5000);
+                showUpdateNotification();
             }
         });
     }
@@ -346,23 +443,25 @@ async function populateDailyChart() {
         }
     }
     
-    // Get data for last 7 days + today
+    // Get data for Monday to Sunday of current week
     const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
     const today = new Date();
+    const monday = getMondayOfCurrentWeek();
     const tasksByDay = {};
     
     console.log(`📅 Today's date: ${today.toLocaleDateString('id-ID')}`);
+    console.log(`📅 Monday of current week: ${monday.toLocaleDateString('id-ID')}`);
     
-    // Initialize all days (8 days total: today + 7 back)
-    for (let i = 0; i <= 7; i++) {
-        const date = new Date(today);
-        date.setDate(date.getDate() - i);
+    // Initialize all days (Monday to Sunday = 7 days)
+    for (let i = 0; i < 7; i++) {
+        const date = new Date(monday);
+        date.setDate(date.getDate() + i);
         // Format tanggal dengan konsisten: DD/MM/YYYY (dengan leading zeros)
         const dayKey = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
         tasksByDay[dayKey] = { count: 0, day: dayNames[date.getDay()], date: date };
     }
     
-    console.log(`📅 Days to display (${Object.keys(tasksByDay).length} days):`, Object.keys(tasksByDay).sort());
+    console.log(`📅 Days to display (${Object.keys(tasksByDay).length} days - Senin to Minggu):`, Object.keys(tasksByDay).sort());
     console.log(`📝 Format tanggal yang digunakan: DD/MM/YYYY dengan leading zeros`);
     
     // Count all tasks (completed or in progress) for each day
@@ -889,7 +988,7 @@ async function muatLogHariIni() {
 }
 
 // ===============================================
-// FUNGSI DATE PICKER - Generate Pills (Flipped: Today on Right)
+// FUNGSI DATE PICKER - Generate Pills (Senin - Minggu)
 // ===============================================
 function generateDatePills() {
     const container = document.getElementById('datePillsContainer');
@@ -909,10 +1008,18 @@ function generateDatePills() {
     const today = new Date();
     const datesArray = [];
     
-    // Collect all dates first (7 days back to today)
-    for (let i = 6; i >= 0; i--) {
-        const date = new Date(today);
-        date.setDate(date.getDate() - i);
+    // Cari tanggal untuk hari Senin di minggu ini
+    const dayOfWeek = today.getDay(); // 0 = Minggu, 1 = Senin, dst
+    // Jika hari ini Minggu (0), maka mundur 6 hari. Jika bukan, mundur (dayOfWeek - 1) hari.
+    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; 
+    
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - diffToMonday);
+    
+    // Generate 7 hari dari Senin sampai Minggu
+    for (let i = 0; i < 7; i++) {
+        const date = new Date(startOfWeek);
+        date.setDate(startOfWeek.getDate() + i);
         datesArray.push(date);
     }
     
@@ -961,7 +1068,7 @@ function generateDatePills() {
         container.appendChild(pill);
     });
     
-    console.log('✅ Pills generated');
+    console.log('✅ Pills generated (Senin - Minggu)');
 }
 
 async function selectDatePill(pillElement, dateObj) {
@@ -1603,7 +1710,12 @@ function tutorBukaIdentitas() {
     setTimeout(() => document.getElementById('nama').focus(), 100); 
 }
 
-function konfirmasiNamaSiap() { localStorage.setItem('logTanggalKonfirmasiNama', new Date().toLocaleDateString('id-ID')); document.getElementById('modalNamaHarian').style.display = 'none'; cekModalBulanan(); }
+function konfirmasiNamaSiap() { 
+    localStorage.setItem('logTanggalKonfirmasiNama', new Date().toLocaleDateString('id-ID')); 
+    document.getElementById('modalNamaHarian').style.display = 'none'; 
+    updateHeaderTeknisiName(); // Update header with technician name
+    cekModalBulanan(); 
+}
 function cekModalBulanan() { const d = new Date(); if (d.getDate() === 1 && localStorage.getItem('logBulanModalMuncul') !== (d.getMonth() + "-" + d.getFullYear())) { document.getElementById('modalBulanan').style.display = 'flex'; } }
 function konfirmasiModalBulanan() {
     const tipeDipilih = document.querySelector('input[name="modalTipe"]:checked').value; localStorage.setItem('logSettingTipe', tipeDipilih);
@@ -1708,7 +1820,8 @@ function simpanNama() {
     const namaInput = document.getElementById('nama').value;
     const namaTeknski = normalizeTechnicianName(namaInput);
     console.log('💾 Saving technician name:', namaInput, '→', namaTeknski);
-    localStorage.setItem('logSettingNama', namaTeknski); 
+    localStorage.setItem('logSettingNama', namaTeknski);
+    updateHeaderTeknisiName(); // Update header with new technician name
 }
 
 async function simpanNamaDanSync() {
