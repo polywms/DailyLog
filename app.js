@@ -443,9 +443,28 @@ async function populateDailyChart() {
         }
     }
     
+    // PENTING: Tambahkan data hari ini dari dailyLogTeknisi agar tugas hari ini muncul di chart
+    const today = new Date();
+    const todayStr = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
+    const dailyLogRaw = localStorage.getItem('dailyLogTeknisi');
+    const dailyLogData = JSON.parse(dailyLogRaw) || [];
+    
+    console.log(`📝 [PENTING] Including today's dailyLogTeknisi data: ${dailyLogData.length} items`);
+    console.log(`📅 Today's date string: "${todayStr}"`);
+    
+    // Filter dailyLogTeknisi untuk hanya hari ini dan gabung dengan logData
+    const todayDailyTasks = dailyLogData.filter(item => item.tanggal === todayStr && item.tipe !== 'ISTIRAHAT');
+    console.log(`📝 Today's daily tasks (filtered): ${todayDailyTasks.length} items`);
+    if (todayDailyTasks.length > 0) {
+        console.log(`📋 Today's tasks sample:`, todayDailyTasks.slice(0, 3));
+    }
+    
+    // Gabung: history + hari ini dari daily log
+    logData = logData.concat(todayDailyTasks);
+    console.log(`✅ Combined data (history + today): ${logData.length} items`);
+    
     // Get data for Monday to Sunday of current week
     const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
-    const today = new Date();
     const monday = getMondayOfCurrentWeek();
     const tasksByDay = {};
     
@@ -622,6 +641,26 @@ async function populateWeeklyChart() {
             return;
         }
     }
+    
+    // PENTING: Tambahkan data hari ini dari dailyLogTeknisi agar tugas hari ini muncul di chart
+    const today = new Date();
+    const todayStr = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
+    const dailyLogRaw = localStorage.getItem('dailyLogTeknisi');
+    const dailyLogData = JSON.parse(dailyLogRaw) || [];
+    
+    console.log(`📝 [PENTING] Including today's dailyLogTeknisi data: ${dailyLogData.length} items`);
+    console.log(`📅 Today's date string: "${todayStr}"`);
+    
+    // Filter dailyLogTeknisi untuk hanya hari ini dan gabung dengan logData
+    const todayDailyTasks = dailyLogData.filter(item => item.tanggal === todayStr && item.tipe !== 'ISTIRAHAT');
+    console.log(`📝 Today's daily tasks (filtered): ${todayDailyTasks.length} items`);
+    if (todayDailyTasks.length > 0) {
+        console.log(`📋 Today's tasks sample:`, todayDailyTasks.slice(0, 3));
+    }
+    
+    // Gabung: history + hari ini dari daily log
+    logData = logData.concat(todayDailyTasks);
+    console.log(`✅ Combined data (history + today): ${logData.length} items`);
     
     // Helper function: Get Monday of the week for a given date
     function getMondayOfWeek(date) {
