@@ -147,6 +147,19 @@
             </div>
             
             <div id="tab-harian" class="content active">
+                <!-- Blinking PENGUMUMAN Label with Close Button -->
+                <div id="labelPengumuman" style="display: none; background: var(--primary); padding: 8px 16px; border-radius: 5px 5px 0 0; box-shadow: 0 2px 6px rgba(217, 37, 52, 0.2); display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; box-sizing: border-box;">
+                    <span style="font-weight: 900; font-size: 12px; letter-spacing: 2px; color: white; animation: blink 1s ease-in-out infinite; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">📢 PENGUMUMAN</span>
+                    <button onclick="tutupPengumuman()" style="background: white; border: none; color: var(--primary); font-size: 16px; cursor: pointer; padding: 3px 7px; font-weight: bold; border-radius: 3px; height: 26px; width: 26px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; visibility: hidden; opacity: 0; transition: opacity 0.3s ease-in-out;">✕</button>
+                </div>
+                
+                <!-- Running Text Announcement -->
+                <div id="containerPengumuman" style="display: none; margin-bottom: 15px; overflow: hidden; border-radius: 0 0 5px 5px; background: linear-gradient(90deg, #FFB703 0%, #FB8500 100%); box-shadow: 0 2px 8px rgba(217, 37, 52, 0.15);">
+                    <div id="runningTextPengumuman" style="color: #1a1a1a; padding: 14px 24px; font-weight: 700; font-size: 14px; overflow: hidden;">
+                        <span id="textPengumuman" style="white-space: nowrap; display: inline-block; animation: scrollText 15s linear infinite;">--</span>
+                    </div>
+                </div>
+                
                 <div id="areaKunjungan">
                     <div id="tiketPerjalanan">
                         <h4><i class="fa-solid fa-map-location-dot"></i> Tugas Aktif</h4>

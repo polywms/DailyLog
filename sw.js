@@ -1,5 +1,5 @@
 // UBAH NAMA INI SETIAP KALI ADA UPDATE FITUR BARU!
-const CACHE_NAME = 'artemis-log-v151'; 
+const CACHE_NAME = 'artemis-log-v152'; 
 
 const urlsToCache = [
     './',
@@ -47,7 +47,26 @@ self.addEventListener('activate', event => {
     self.clients.claim(); // Ambil kendali halaman segera
 });
 
-// 3. Proses Ambil Data: Strategi NETWORK-FIRST
+// 3. Notification Click Handler: Focus app when notification clicked
+self.addEventListener('notificationclick', event => {
+    event.notification.close();
+    event.waitUntil(
+        clients.matchAll({ type: 'window' }).then(clientList => {
+            // Check if app window already open
+            for (let client of clientList) {
+                if (client.url === '/' || client.url.includes('index.html') && 'focus' in client) {
+                    return client.focus();
+                }
+            }
+            // If no window open, open new one
+            if (clients.openWindow) {
+                return clients.openWindow('./');
+            }
+        })
+    );
+});
+
+// 4. Proses Ambil Data: Strategi NETWORK-FIRST
 self.addEventListener('fetch', event => {
     // Jangan cache request ke Google Script (API)
     if (event.request.url.includes('script.google.com')) return;

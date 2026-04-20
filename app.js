@@ -1509,6 +1509,360 @@ function populateKendalaList() {
     console.log('✅ populateKendalaList() completed');
 }
 
+// ============= NOTIFICATION SCHEDULER MODULE =============
+let notificationSchedulerActive = false;
+let morningReminderSent = false;
+let afternoonReminderInterval = null;
+
+function requestNotificationPermission() {
+    if (!('Notification' in window)) {
+        console.log('⚠️ Browser tidak support Notification API');
+        return false;
+    }
+
+    if (Notification.permission === 'granted') {
+        console.log('✅ Notification permission sudah diberikan');
+        return true;
+    }
+
+    if (Notification.permission !== 'denied') {
+        Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+                console.log('✅ Izin notifikasi diberikan oleh user');
+                localStorage.setItem('notification_permission', 'granted');
+                sendNotification('Teknisi Log', 'Notifikasi pengingat telah diaktifkan! 🔔');
+            } else {
+                console.log('❌ User menolak izin notifikasi');
+                localStorage.setItem('notification_permission', 'denied');
+            }
+        });
+    }
+}
+
+function sendNotification(title, message, options = {}) {
+    if (Notification.permission !== 'granted') {
+        console.log('⚠️ Notification permission not granted, skipping notification');
+        return;
+    }
+
+    const defaultOptions = {
+        icon: './icon.png',
+        badge: './icon.png',
+        tag: 'teknisilog-notification',
+        requireInteraction: true,
+        ...options
+    };
+
+    try {
+        new Notification(title, {
+            body: message,
+            ...defaultOptions
+        });
+        console.log(`📢 Notifikasi terkirim: ${title} - ${message}`);
+    } catch (err) {
+        console.error('Error sending notification:', err);
+    }
+}
+
+function checkActivityToday() {
+    if (!logData || logData.length === 0) {
+        console.log('📋 Tidak ada aktivitas hari ini');
+        return false;
+    }
+    
+    const today = new Date().toLocaleDateString('id-ID');
+    const hasActivityToday = logData.some(log => {
+        const logDate = new Date(log.tanggal || today).toLocaleDateString('id-ID');
+        return logDate === today;
+    });
+    
+    console.log(`📋 Activity today: ${hasActivityToday}`);
+    return hasActivityToday;
+}
+
+function hasUserStartedJourney() {
+    const started = currentState !== 'BERANGKAT';
+    console.log(`🚗 Journey started: ${started} (currentState: ${currentState})`);
+    return started;
+}
+
+function stopReminderLoop() {
+    if (afternoonReminderInterval) {
+        clearInterval(afternoonReminderInterval);
+        afternoonReminderInterval = null;
+        console.log('🛑 Reminder loop dihentikan');
+        localStorage.setItem('notification_reminderStopped', 'true');
+    }
+}
+
+function scheduleReminders() {
+    if (notificationSchedulerActive) {
+        console.log('⚙️ Scheduler sudah aktif');
+        return;
+    }
+
+    const logSettingTipe = localStorage.getItem('logSettingTipe');
+    if (logSettingTipe !== 'Kunjungan') {
+        console.log('⚠️ Reminder hanya untuk mode Kunjungan. Current: ' + logSettingTipe);
+        return;
+    }
+
+    if (Notification.permission !== 'granted') {
+        console.log('⚠️ Notification not permitted, scheduler inactive');
+        return;
+    }
+
+    notificationSchedulerActive = true;
+    const today = new Date().toLocaleDateString('id-ID');
+    localStorage.setItem('notification_schedulerDate', today);
+
+    // Setup morning greeting (08:30)
+    function checkMorningReminder() {
+        const now = new Date();
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+        const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+
+        if (hours === 8 && minutes >= 30 && minutes <= 31 && !morningReminderSent) {
+            if (!checkActivityToday() && !hasUserStartedJourney()) {
+                sendNotification(
+                    'Selamat Pagi! 🌅',
+                    'Selamat beraktifitas! Jangan lupa catat perjalananmu hari ini.'
+                );
+                morningReminderSent = true;
+                localStorage.setItem('notification_morningReminder_sent', 'true');
+                console.log('✅ Morning reminder sent at ' + timeString);
+            }
+        }
+    }
+
+    // Setup 09:30+ reminder loop (every 30 minutes)
+    function checkAfternoonReminder() {
+        const now = new Date();
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+        const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+
+        // Stop reminders after 18:00 (6 PM)
+        if (hours >= 18) {
+            console.log('⏰ Passed 18:00, stopping reminder loop');
+            stopReminderLoop();
+            return;
+        }
+
+        // Check if user already started journey
+        if (hasUserStartedJourney()) {
+            console.log('🚗 User sudah mulai perjalanan, stop reminders');
+            stopReminderLoop();
+            return;
+        }
+
+        // Send reminder every 30 minutes starting from 09:30
+        if (hours >= 9 && !checkActivityToday()) {
+            const lastReminderTime = localStorage.getItem('notification_lastReminderTime');
+            const lastReminderDate = localStorage.getItem('notification_lastReminderDate');
+            const todayStr = new Date().toLocaleDateString('id-ID');
+
+            // Send reminder on first check at 09:30 and then every 30 minutes
+            if (!lastReminderDate || lastReminderDate !== todayStr) {
+                // First reminder of the day at 09:30+
+                if (minutes >= 30) {
+                    sendNotification(
+                        `Jam ${timeString} ⏰`,
+                        'Belum berangkat atau lupa mulai catat perjalanan?'
+                    );
+                    localStorage.setItem('notification_lastReminderTime', timeString);
+                    localStorage.setItem('notification_lastReminderDate', todayStr);
+                    console.log('📢 First afternoon reminder sent at ' + timeString);
+                }
+            } else {
+                // Check if 30 minutes passed since last reminder
+                if (lastReminderTime) {
+                    const [lastH, lastM] = lastReminderTime.split(':').map(Number);
+                    const lastTotalMinutes = lastH * 60 + lastM;
+                    const nowTotalMinutes = hours * 60 + minutes;
+                    const minutesPassed = nowTotalMinutes - lastTotalMinutes;
+
+                    if (minutesPassed >= 30) {
+                        sendNotification(
+                            `Jam ${timeString} ⏰`,
+                            'Belum berangkat atau lupa mulai catat perjalanan?'
+                        );
+                        localStorage.setItem('notification_lastReminderTime', timeString);
+                        console.log('📢 Repeat afternoon reminder sent at ' + timeString);
+                    }
+                }
+            }
+        }
+    }
+
+    // Check every minute
+    const reminderCheckInterval = setInterval(() => {
+        checkMorningReminder();
+        checkAfternoonReminder();
+    }, 60000); // Check every 60 seconds
+
+    // Also store interval for stopping
+    afternoonReminderInterval = reminderCheckInterval;
+
+    // Initial check
+    checkMorningReminder();
+    checkAfternoonReminder();
+
+    console.log('✅ Notification scheduler initialized');
+}
+
+function initNotificationScheduler() {
+    console.log('🔔 Initializing notification scheduler...');
+    
+    // Request permission first
+    requestNotificationPermission();
+
+    // Then schedule reminders
+    setTimeout(() => {
+        scheduleReminders();
+    }, 1000);
+}
+
+// ============= RUNNING TEXT ANNOUNCEMENT SYSTEM =============
+function cekPengumuman() {
+    const nama = localStorage.getItem('logSettingNama');
+    const containerPengumuman = document.getElementById('containerPengumuman');
+    const labelPengumuman = document.getElementById('labelPengumuman');
+    const textPengumuman = document.getElementById('textPengumuman');
+    
+    if (!containerPengumuman || !textPengumuman || !labelPengumuman) {
+        console.log('⚠️ Pengumuman container not found');
+        return;
+    }
+
+    const payload = {
+        action: 'get_pengumuman',
+        nama: nama || 'Anonymous'
+    };
+
+    fetch(scriptURL, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('📢 Pengumuman response:', data);
+        
+        if (data.status === 'empty') {
+            // Admin menghapus pengumuman - sembunyikan
+            containerPengumuman.style.display = 'none';
+            labelPengumuman.style.display = 'none';
+            localStorage.removeItem('pengumumanAktif');
+            localStorage.removeItem('pengumumanWaktuMulai');
+            console.log('✅ Pengumuman dihapus - container disembunyikan');
+            return;
+        }
+
+        if (data.status === 'success' && data.data) {
+            const pesanBaru = data.data.pesan;
+            const durasi = data.data.durasi || 60; // Default 60 detik
+            const pesanAktif = localStorage.getItem('pengumumanAktif');
+            const pesanDismissed = localStorage.getItem('pengumumanDismissed');
+            const waktuMulai = localStorage.getItem('pengumumanWaktuMulai');
+            
+            // CEK: User sudah dismiss pengumuman ini?
+            if (pesanBaru === pesanDismissed) {
+                console.log('⏭️ Pengumuman sudah di-dismiss, skip...');
+                return;
+            }
+            
+            // CEK: Apakah ini pengumuman BARU?
+            if (pesanBaru !== pesanAktif) {
+                // Clear dismissed flag ketika announcement baru datang
+                localStorage.removeItem('pengumumanDismissed');
+                // Pengumuman BARU - simpan dan tampilkan
+                localStorage.setItem('pengumumanAktif', pesanBaru);
+                localStorage.setItem('pengumumanWaktuMulai', Date.now().toString());
+                localStorage.setItem('pengumumanDurasi', durasi.toString());
+                
+                textPengumuman.textContent = pesanBaru;
+                containerPengumuman.style.display = 'block';
+                labelPengumuman.style.display = 'flex';
+                
+                // Sembunyikan tombol X dulu
+                const btnClosePengumuman = labelPengumuman.querySelector('button');
+                if (btnClosePengumuman) {
+                    btnClosePengumuman.style.visibility = 'hidden';
+                    btnClosePengumuman.style.opacity = '0';
+                    btnClosePengumuman.style.transition = 'opacity 0.3s ease-in-out';
+                    
+                    // Tampilkan tombol X setelah 15 detik
+                    setTimeout(() => {
+                        btnClosePengumuman.style.visibility = 'visible';
+                        btnClosePengumuman.style.opacity = '1';
+                    }, 15000);
+                }
+                
+                console.log('🆕 Pengumuman BARU ditampilkan:', pesanBaru);
+                return;
+            }
+
+            // Pengumuman yang SAMA - cek durasi
+            if (waktuMulai && pesanAktif === pesanBaru) {
+                const sekarang = Date.now();
+                const waktuMulaiMs = parseInt(waktuMulai);
+                const selisihDetik = (sekarang - waktuMulaiMs) / 1000;
+                
+                console.log(`⏱️ Durasi check: ${selisihDetik.toFixed(1)}s / ${durasi}s`);
+                
+                if (selisihDetik > durasi) {
+                    // Durasi habis - sembunyikan
+                    containerPengumuman.style.display = 'none';
+                    labelPengumuman.style.display = 'none';
+                    localStorage.removeItem('pengumumanAktif');
+                    localStorage.removeItem('pengumumanWaktuMulai');
+                    console.log('⏳ Durasi pengumuman habis - disembunyikan');
+                } else {
+                    // Masih dalam durasi - tetap tampil
+                    containerPengumuman.style.display = 'block';
+                    labelPengumuman.style.display = 'flex';
+                }
+            }
+        }
+    })
+    .catch(err => {
+        console.error('❌ Error mengecek pengumuman:', err);
+    });
+}
+
+// Panggil saat app load
+window.addEventListener('DOMContentLoaded', () => {
+    // Delay untuk pastikan localStorage sudah siap
+    setTimeout(() => {
+        cekPengumuman();
+        console.log('✅ Initial pengumuman check done');
+    }, 500);
+});
+
+// Tutup pengumuman secara manual
+function tutupPengumuman() {
+    const containerPengumuman = document.getElementById('containerPengumuman');
+    const labelPengumuman = document.getElementById('labelPengumuman');
+    const pesanAktif = localStorage.getItem('pengumumanAktif');
+    
+    if (containerPengumuman && labelPengumuman) {
+        containerPengumuman.style.display = 'none';
+        labelPengumuman.style.display = 'none';
+        
+        // Simpan pesan yang di-dismiss agar tidak muncul lagi
+        if (pesanAktif) {
+            localStorage.setItem('pengumumanDismissed', pesanAktif);
+        }
+        
+        localStorage.removeItem('pengumumanAktif');
+        localStorage.removeItem('pengumumanWaktuMulai');
+        localStorage.removeItem('pengumumanDurasi');
+        console.log('✕ Pengumuman ditutup secara manual:', pesanAktif);
+    }
+}
+
 // Close modal when clicking outside
 document.addEventListener('DOMContentLoaded', function() {
     const modalTaskHistory = document.getElementById('modalTaskHistory');
@@ -2029,6 +2383,7 @@ function eksekusiFase() {
         currentState = 'SAMPAI'; 
         simpanStateTiket(); 
         kirimDataParsial('simpan_berangkat');
+        stopReminderLoop(); // Stop notification reminders when journey started
 
     } else if (currentState === 'SAMPAI') {
         aktifWaktuSampai = getWaktuSekarang(); 
@@ -2215,11 +2570,19 @@ async function jalankanSync() {
 
 window.addEventListener('online', jalankanSync);
 
+// Check pengumuman setiap 10 detik (integrated dengan existing sync)
+setInterval(() => {
+    cekPengumuman();
+}, 10000);
+
 if ('serviceWorker' in navigator) { 
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js')
             .then(reg => { reg.update(); })
             .catch(err => console.log('SW Error: ', err));
+        
+        // Initialize notification scheduler on app load
+        initNotificationScheduler();
     });
 
     let refreshing = false;
