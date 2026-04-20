@@ -1750,13 +1750,28 @@ function cekPengumuman() {
     .then(data => {
         console.log('📢 Pengumuman response:', data);
         
-        if (data.status === 'empty') {
-            // Admin menghapus pengumuman - sembunyikan
+        // Helper function untuk clear semua pengumuman
+        const clearAllPengumuman = () => {
             containerPengumuman.style.display = 'none';
             labelPengumuman.style.display = 'none';
             localStorage.removeItem('pengumumanAktif');
             localStorage.removeItem('pengumumanWaktuMulai');
-            console.log('✅ Pengumuman dihapus - container disembunyikan');
+            localStorage.removeItem('pengumumanDurasi');
+            localStorage.removeItem('pengumumanDismissed');
+            console.log('🧹 All pengumuman data cleared from localStorage');
+        };
+        
+        // Validasi response format
+        if (!data || typeof data !== 'object' || !data.status) {
+            console.warn('⚠️ Invalid response format:', data);
+            clearAllPengumuman();
+            return;
+        }
+        
+        if (data.status === 'empty' || !data.data) {
+            // Admin menghapus pengumuman - sembunyikan SEMUA
+            clearAllPengumuman();
+            console.log('✅ Sheet pengumuman kosong - semua container disembunyikan & localStorage cleared');
             return;
         }
 
@@ -1814,10 +1829,7 @@ function cekPengumuman() {
                 
                 if (selisihDetik > durasi) {
                     // Durasi habis - sembunyikan
-                    containerPengumuman.style.display = 'none';
-                    labelPengumuman.style.display = 'none';
-                    localStorage.removeItem('pengumumanAktif');
-                    localStorage.removeItem('pengumumanWaktuMulai');
+                    clearAllPengumuman();
                     console.log('⏳ Durasi pengumuman habis - disembunyikan');
                 } else {
                     // Masih dalam durasi - tetap tampil
@@ -1829,6 +1841,10 @@ function cekPengumuman() {
     })
     .catch(err => {
         console.error('❌ Error mengecek pengumuman:', err);
+        // Clear container jika ada error
+        containerPengumuman.style.display = 'none';
+        labelPengumuman.style.display = 'none';
+        console.log('🧹 Container cleared due to fetch error');
     });
 }
 
