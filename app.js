@@ -2588,8 +2588,18 @@ if ('serviceWorker' in navigator) {
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (!refreshing) {
-            window.location.reload();
-            refreshing = true;
+            // Show update modal sebelum reload
+            const modalUpdate = document.getElementById('modalUpdate');
+            if (modalUpdate) {
+                modalUpdate.style.display = 'flex';
+                console.log('📢 Update modal shown');
+            }
+            
+            // Delay 2 detik biar modal keliatan
+            setTimeout(() => {
+                window.location.reload();
+                refreshing = true;
+            }, 2000);
         }
     });
 }
