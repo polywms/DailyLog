@@ -2480,8 +2480,40 @@ function simpanDataFinalKunjungan() {
         kendalaGabung = detailKendala;
     }
     
-    const payloadTugas = { action: 'update_selesai', taskId: aktifTaskId, jamBerangkat: aktifWaktuBerangkat, jamSampai: aktifWaktuSampai, jamSelesai: getWaktuSekarang(), tipe: 'Kunjungan', namaKlien: aktifNamaKlien, alamatKlien: aktifAlamatKlien, detail: document.getElementById('detailKunjungan').value, kendala: kendalaGabung };
+    const payloadTugas = { 
+        action: 'update_selesai', 
+        taskId: aktifTaskId, 
+        jamBerangkat: aktifWaktuBerangkat, 
+        jamSampai: aktifWaktuSampai, 
+        jamSelesai: getWaktuSekarang(), 
+        tipe: 'Kunjungan', 
+        namaKlien: aktifNamaKlien, 
+        alamatKlien: aktifAlamatKlien, 
+        detail: document.getElementById('detailKunjungan').value, 
+        kendala: kendalaGabung,
+        nama: localStorage.getItem('logSettingNama'),
+        tanggal: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    };
+    
+    // AUDIT FIX 3.1: Reset state SEBELUM request GPS (data sudah aman di queue)
+    console.log('[simpanDataFinalKunjungan] Resetting UI state untuk Kunjungan');
+    sliderContainer.classList.remove('disabled'); 
+    sliderText.innerText = 'Geser Mulai Perjalanan >>';
+    localStorage.removeItem('tiketTugasAktif'); 
+    document.getElementById('namaCustomer').value = '';
+    document.getElementById('alamatCustomer').value = '';
+    document.getElementById('detailKunjungan').value = '';
+    document.getElementById('kendalaKunjungan').value = '';
+    document.getElementById('tipeKendala').value = '';
+    currentState = 'BERANGKAT'; 
+    aktifTaskId = '';
+    renderUIBerdasarkanState();
+    
+    // AUDIT FIX 3.1: Minta GPS dan simpan ke antrean (async)
     mintaGPSDanSimpan(payloadTugas);
+    
+    // Refresh display segera (sebelum sync)
+    tampilkanLog();
 }
 
 function simpanDataInternal() {
@@ -2492,15 +2524,97 @@ function simpanDataInternal() {
     let cekJamMalam = parseInt(jamMulai.split(':')[0]);
     if (cekJamMalam >= 19) { if(!confirm(`⚠️ PERINGATAN JAM KERJA!\n\nJam mulai tercatat malam hari: ${jamMulai}.\nJika ini harusnya pagi hari, berarti salah AM/PM. Lanjut simpan?`)) return; }
 
-    document.getElementById('btnSimpanInternal').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> MENCARI GPS...'; document.getElementById('btnSimpanInternal').disabled = true;
-    const payloadTugas = { action: "simpan", taskId: "T" + Date.now(), jamBerangkat: "-", jamSampai: jamMulai, jamSelesai: jamSelesai, tipe: 'Tugas Internal / CS', namaKlien: document.getElementById('jenisTugasInternal').value, alamatKlien: "Internal / Kantor", detail: detail, kendala: document.getElementById('kendalaInternal').value };
+    document.getElementById('btnSimpanInternal').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> MENCARI GPS...'; 
+    document.getElementById('btnSimpanInternal').disabled = true;
+    
+    const payloadTugas = { 
+        action: "simpan", 
+        taskId: "T" + Date.now(), 
+        jamBerangkat: "-", 
+        jamSampai: jamMulai, 
+        jamSelesai: jamSelesai, 
+        tipe: 'Tugas Internal / CS', 
+        namaKlien: document.getElementById('jenisTugasInternal').value, 
+        alamatKlien: "Internal / Kantor", 
+        detail: detail, 
+        kendala: document.getElementById('kendalaInternal').value,
+        nama: localStorage.getItem('logSettingNama'),
+        tanggal: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    };
+    
+    // AUDIT FIX 3.1: Reset form SEBELUM request GPS (data sudah aman di queue)
+    console.log('[simpanDataInternal] Resetting UI state untuk Internal Task');
+    document.getElementById('jamMulaiInternal').value = '';
+    document.getElementById('jamSelesaiInternal').value = '';
+    document.getElementById('detailInternal').value = '';
+    document.getElementById('kendalaInternal').value = '';
+    document.getElementById('btnSimpanInternal').innerHTML = '<i class="fa-solid fa-floppy-disk"></i> SIMPAN TUGAS INTERNAL'; 
+    document.getElementById('btnSimpanInternal').disabled = false;
+    
+    // AUDIT FIX 3.1: Minta GPS dan simpan ke antrean (async)
     mintaGPSDanSimpan(payloadTugas);
+    
+    // Refresh display segera (sebelum sync)
+    tampilkanLog();
 }
 
 function mintaGPSDanSimpan(payload) {
+    // AUDIT FIX 3.1: Simpan payload ke antrean DULU sebelum request GPS (prevent void drop)
+    // Tandai dengan GPS: "Menunggu..." dan update nanti setelah GPS didapat
+    const payloadWithPendingGPS = {
+        ...payload,
+        gps: "Menunggu..."  // Temporary marker
+    };
+    
+    console.log('[mintaGPSDanSimpan] Saving payload to queue BEFORE GPS fetch:', payloadWithPendingGPS.action);
+    
+    // AUDIT FIX 3.1: Push ke antrean terlebih dahulu (secure dari void drop)
+    let antrean = JSON.parse(localStorage.getItem('antreanLog')) || [];
+    antrean.push(payloadWithPendingGPS);
+    localStorage.setItem('antreanLog', JSON.stringify(antrean));
+    
+    // Now request GPS and update the last queued item with actual GPS data
     if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition((pos) => eksekusiSimpanGPS(pos.coords.latitude + ", " + pos.coords.longitude, payload), (err) => eksekusiSimpanGPS("GPS Offline/Ditolak", payload), { timeout: 5000 });
-    } else { eksekusiSimpanGPS("Tanpa GPS", payload); }
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const gpsCoords = pos.coords.latitude + ", " + pos.coords.longitude;
+                updateGPSInQueue(gpsCoords, payloadWithPendingGPS);
+            },
+            (err) => {
+                const gpsFallback = "GPS Offline/Ditolak";
+                updateGPSInQueue(gpsFallback, payloadWithPendingGPS);
+            },
+            { timeout: 5000 }
+        );
+    } else {
+        updateGPSInQueue("Tanpa GPS", payloadWithPendingGPS);
+    }
+}
+
+function updateGPSInQueue(gpsData, originalPayload) {
+    // AUDIT FIX 3.1: Update antrean item dengan actual GPS data
+    console.log('[updateGPSInQueue] Updating GPS for action=' + originalPayload.action + ', gps=' + gpsData);
+    
+    let antrean = JSON.parse(localStorage.getItem('antreanLog')) || [];
+    
+    // Find the item dengan matching taskId (atau action + nama jika tidak ada taskId)
+    for (let i = 0; i < antrean.length; i++) {
+        if (antrean[i].gps === "Menunggu..." && 
+            antrean[i].action === originalPayload.action) {
+            
+            // Update GPS data
+            antrean[i].gps = gpsData;
+            localStorage.setItem('antreanLog', JSON.stringify(antrean));
+            
+            console.log('[updateGPSInQueue] ✓ Updated GPS for item at index ' + i);
+            
+            // Trigger sync setelah GPS update
+            jalankanSync();
+            return;
+        }
+    }
+    
+    console.warn('[updateGPSInQueue] ⚠️ Item tidak ditemukan untuk update GPS');
 }
 
 function eksekusiSimpanGPS(gps, payload) {
@@ -2537,22 +2651,34 @@ function tampilkanLog() {
 function hapusSemua() { if(confirm('Yakin mereset seluruh log?')) { localStorage.removeItem('dailyLogTeknisi'); logData = []; tampilkanLog(); } }
 
 // ==============================================
-// AUTO SYNC & SERVICE WORKER
+// AUTO SYNC & SERVICE WORKER (REFACTORED - ATOMIC QUEUE MANAGEMENT)
 // ==============================================
 async function jalankanSync() {
-    if (!navigator.onLine || isSyncing) return;
+    // AUDIT FIX 1.1: Perkuat check isSyncing untuk mencegah multiple concurrent calls
+    if (!navigator.onLine || isSyncing) {
+        console.log('[jalankanSync] Skipped: online=' + navigator.onLine + ', isSyncing=' + isSyncing);
+        return;
+    }
     
     let antreanCek = JSON.parse(localStorage.getItem('antreanLog')) || [];
     if (antreanCek.length === 0) return; 
     
     isSyncing = true;
     const btnTabHarian = document.getElementById('btn-harian');
-    const modalSync = document.getElementById('modalSync'); 
+    const modalSync = document.getElementById('modalSync');
+    let itemsProcessed = 0;
 
     try {
         if (modalSync) modalSync.style.display = 'flex';
+        console.log('[jalankanSync] START - Queue items: ' + antreanCek.length);
 
         while (true) {
+            // AUDIT FIX 1.2: Check navigator.onLine di dalam loop untuk deteksi koneksi putus
+            if (!navigator.onLine) {
+                console.log('[jalankanSync] Koneksi terputus di tengah sinkronisasi. Stop loop.');
+                break;
+            }
+            
             let antrean = JSON.parse(localStorage.getItem('antreanLog')) || [];
             if (antrean.length === 0) break;
 
@@ -2560,23 +2686,65 @@ async function jalankanSync() {
             let payload = antrean[0];
             if (!payload.action) payload.action = "simpan";
 
+            let fetchSuccess = false;
+            let backendValidation = false;
+
             try {
+                console.log('[jalankanSync] Processing item: action=' + payload.action + ', taskId=' + (payload.taskId || 'N/A'));
+                
                 const respon = await fetch(scriptURL, {
                     method: 'POST',
                     body: JSON.stringify(payload),
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    timeout: 10000
                 });
+                
+                if (!respon.ok) {
+                    console.error('[jalankanSync] HTTP error:', respon.status, respon.statusText);
+                    break; // Stop on HTTP error, keep queue intact
+                }
+                
+                fetchSuccess = true;
                 const resJson = await respon.json();
                 
-                if (resJson.status === 'success' || resJson.status === 'error') {
-                    let antreanUpdate = JSON.parse(localStorage.getItem('antreanLog')) || [];
-                    antreanUpdate.shift(); 
-                    localStorage.setItem('antreanLog', JSON.stringify(antreanUpdate));
+                console.log('[jalankanSync] Response:', resJson);
+                
+                // AUDIT FIX 1.3: Validasi backend response - HANYA shift jika status success DAN backend confirm
+                if (resJson.status === 'success') {
+                    // Untuk update/delete actions, check flag dari backend
+                    if (payload.action === 'update_sampai' || payload.action === 'update_selesai') {
+                        backendValidation = resJson.taskIdFound !== false; // Accept true atau undefined (backward compat)
+                        console.log('[jalankanSync] Backend validation for ' + payload.action + ': ' + backendValidation);
+                    } else if (payload.action === 'delete_task') {
+                        backendValidation = resJson.rowDeleted !== false;
+                        console.log('[jalankanSync] Backend validation for delete_task: ' + backendValidation);
+                    } else {
+                        backendValidation = true; // Assume success for other actions
+                    }
+                    
+                    // AUDIT FIX 1.3: HANYA shift jika backend confirm ATAU jika tidak ada validation data (backward compat)
+                    if (backendValidation || (resJson.taskIdFound === undefined && resJson.rowDeleted === undefined)) {
+                        let antreanUpdate = JSON.parse(localStorage.getItem('antreanLog')) || [];
+                        antreanUpdate.shift(); 
+                        localStorage.setItem('antreanLog', JSON.stringify(antreanUpdate));
+                        itemsProcessed++;
+                        console.log('[jalankanSync] ✓ Item shifted. Remaining: ' + antreanUpdate.length);
+                    } else {
+                        console.warn('[jalankanSync] ⚠️ Backend validation failed, queue item retained for retry');
+                        break; // Stop retry, keep item in queue
+                    }
+                } else if (resJson.status === 'error') {
+                    console.error("[jalankanSync] Server error:", resJson.message);
+                    break; // Stop on explicit server error, keep queue intact
                 }
             } catch (error) {
+                console.error('[jalankanSync] Exception during fetch:', error.name, error.message);
+                // AUDIT FIX 3.3: Network error - break loop tapi JANGAN shift, queue tetap utuh untuk retry nanti
                 break;
             }
         }
+        
+        console.log('[jalankanSync] COMPLETED - Items processed: ' + itemsProcessed);
     } finally {
         btnTabHarian.innerHTML = `<i class="fa-solid fa-list-check"></i> Harian`;
         isSyncing = false;
