@@ -48,6 +48,50 @@
         .btn-time i { font-size: 14px; }
         .btn-time:active { background: #e9ecef; }
 
+    .timeline li.item-perjalanan {
+        padding: 8px 12px !important;
+        margin-bottom: 10px !important;
+        border-left: none !important;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        position: relative;
+    }
+    
+    .timeline li.item-perjalanan::before,
+    .timeline li.item-perjalanan::after {
+        display: none !important;
+    }
+    
+    /* Desain Khusus Blok Mengerjakan di Timeline */
+    .timeline li.item-mengerjakan {
+        padding-top: 10px !important;
+        padding-bottom: 12px !important;
+    }
+
+        /* FIX: TAB SYSTEM UNTUK KUNJUNGAN */
+        .btn-tab-logic {
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            padding: 10px 5px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 13px;
+            color: #666;
+        }
+        .btn-tab-logic.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        .tiket-header-flat {
+            background: #fff9f9;
+            padding: 10px;
+            border-radius: 8px;
+            border-left: 4px solid var(--primary);
+            margin-bottom: 15px;
+        }
+
         .btn-primary { background: var(--primary); color: white; border: none; padding: 14px; width: 100%; border-radius: 6px; font-size: 14px; font-weight: 700; margin-top: 25px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px rgba(217, 37, 52, 0.2); display: flex; justify-content: center; align-items: center; gap: 8px; }
         .btn-primary:active { transform: scale(0.98); background: var(--primary-dark); }
         

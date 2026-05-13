@@ -178,76 +178,64 @@
                     </div>
                 </div>
                 
+                <!-- FIX: PERSISTENCE & LOCK INPUT - Satu Layar Tanpa Perpindahan Container -->
                 <div id="areaKunjungan">
-                    <div id="tiketPerjalanan">
-                        <h4><i class="fa-solid fa-map-location-dot"></i> Tugas Aktif</h4>
-                        <p id="tiketInfoArea">Menuju: <strong>-</strong><br>Lokasi: -</p>
-                        <div class="tiket-waktu">
-                            <div>Berangkat <span id="tiketWaktuBerangkat">--:--</span></div>
-                            <div><i class="fa-solid fa-arrow-right" style="color: #dee2e6; margin-top: 10px;"></i></div>
-                            <div>Tiba/Mulai <span id="tiketWaktuSampai" style="color: #adb5bd;">--:--</span></div>
-                        </div>
-                        <button class="btn-outline btn-danger" style="padding: 8px; font-size: 11px; margin-top: 15px;" onclick="batalTiket()"><i class="fa-solid fa-xmark"></i> Batal / Reset Tugas Ini</button>
+                    <div class="grid-2">
+                        <div><label>Nama Customer</label><input type="text" id="namaCustomer" placeholder="Nama Toko/Orang"></div>
+                        <div><label>Area / Alamat</label><input type="text" id="alamatCustomer" placeholder="Misal: Bandongan"></div>
                     </div>
-                    <div id="formCustomerArea">
-                        <div class="grid-2">
-                            <div><label>Nama Customer</label><input type="text" id="namaCustomer" placeholder="Nama Toko/Orang"></div>
-                            <div><label>Area / Alamat</label><input type="text" id="alamatCustomer" placeholder="Misal: Bandongan"></div>
+                    
+                    <button class="btn-primary" id="btnMulaiKunjungan" onclick="buatTiketKunjungan()" style="margin-top: 15px;"><i class="fa-solid fa-play"></i> MULAI KUNJUNGAN</button>
+
+                    <div id="areaAktivitasTugas" style="display: none; margin-top: 20px; border-top: 2px dashed #eee; padding-top: 15px;">
+                        <div class="tab-kunjungan-container" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-bottom: 15px;">
+                            <button type="button" class="btn-tab-logic" id="tabPerjalanan" onclick="pilihTabKunjungan(this, 'Perjalanan')">Perjalanan</button>
+                            <button type="button" class="btn-tab-logic" id="tabMengerjakan" onclick="pilihTabKunjungan(this, 'Mengerjakan')">Mengerjakan</button>
+                            <button type="button" class="btn-tab-logic" id="tabLainnya" onclick="pilihTabKunjungan(this, 'Lainnya')">Lainnya</button>
+                            <input type="hidden" id="jenisAktivitasKunjungan" value="Perjalanan">
                         </div>
-                    </div>
-                    <!-- FIX: TAHAP 2 - Activity Tracker dengan 3 tombol status -->
-                    <div id="panelAktivitas" style="display: none; margin: 20px 0;">
-                        <label>Status Aktivitas</label>
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
-                            <button id="btnPersiapan" class="btn-outline" onclick="klikTombolPersiapan()" style="padding: 12px; border-radius: 8px; background: #e9ecef; color: #495057; font-weight: 600; transition: all 0.3s;">
-                                <i class="fa-solid fa-bed"></i> Persiapan / Standby
-                            </button>
-                            <button id="btnMulaiPerjalanan" class="btn-outline" onclick="klikTombolMulaiPerjalanan()" style="padding: 12px; border-radius: 8px; background: #e7f3ff; color: #0066cc; font-weight: 600; transition: all 0.3s;">
-                                <i class="fa-solid fa-motorcycle"></i> 🚗 Mulai Perjalanan
-                            </button>
-                            <button id="btnMulaiPengerjaan" class="btn-outline" onclick="klikTombolMulaiPengerjaan()" style="padding: 12px; border-radius: 8px; background: #fff3cd; color: #856404; font-weight: 600; transition: all 0.3s; display: none;">
-                                <i class="fa-solid fa-wrench"></i> 🔧 Mulai Pengerjaan (Tiba)
-                            </button>
-                        </div>
-                    </div>
-                    <div id="formDetailArea" style="display: none;">
-                        <!-- FIX: TAHAP 2 - Tambah 3 input time untuk edit waktu manual -->
+
                         <div class="grid-2">
                             <div>
-                                <label>Jam Berangkat</label>
+                                <label>Jam Mulai</label>
                                 <div class="time-wrapper">
-                                    <input type="time" id="jamBerangkatEdit">
-                                    <button class="btn-time" onclick="setWaktuSekarang('jamBerangkatEdit')"><i class="fa-solid fa-clock"></i>Now</button>
-                                </div>
-                            </div>
-                            <div>
-                                <label>Jam Tiba/Mulai</label>
-                                <div class="time-wrapper">
-                                    <input type="time" id="jamSampaiEdit">
-                                    <button class="btn-time" onclick="setWaktuSekarang('jamSampaiEdit')"><i class="fa-solid fa-clock"></i>Now</button>
+                                    <input type="time" id="jamMulaiKunjungan">
+                                    <button class="btn-time" onclick="setWaktuSekarang('jamMulaiKunjungan')"><i class="fa-solid fa-clock"></i></button>
                                 </div>
                             </div>
                             <div>
                                 <label>Jam Selesai</label>
                                 <div class="time-wrapper">
-                                    <input type="time" id="jamSelesaiEdit">
-                                    <button class="btn-time" onclick="setWaktuSekarang('jamSelesaiEdit')"><i class="fa-solid fa-clock"></i>Now</button>
+                                    <input type="time" id="jamSelesaiKunjungan">
+                                    <button class="btn-time" onclick="setWaktuSekarang('jamSelesaiKunjungan')"><i class="fa-solid fa-clock"></i></button>
                                 </div>
                             </div>
                         </div>
-                        <label>Detail Pekerjaan [Wajib isi]</label>
-                        <textarea id="detailKunjungan" placeholder="Jelaskan apa saja yang dikerjakan... Tulis 'Lancar' kalau tidak ada masalah"></textarea>
-                        <label>Kendala [Kosongkan jika lancar]</label>
-                        <div style="display: grid; grid-template-columns: 120px 1fr; gap: 10px;">
-                            <select id="tipeKendala" style="padding: 10px; border: 1px solid var(--border); border-radius: 6px;">
-                                <option value="">-- Pilih --</option>
-                                <option value="WIP">WIP</option>
-                                <option value="Lainnya">Lainnya</option>
-                            </select>
-                            <input type="text" id="kendalaKunjungan" placeholder="Detail / Penyebab">
+
+                        <div id="wrapperDetailKunjungan" style="display:none; margin-top:15px;">
+                            <div id="containerDetailManual">
+                                <label id="labelDetail">Detail Pekerjaan</label>
+                                <textarea id="detailKunjungan" placeholder="Isi keterangan di sini..."></textarea>
+                            </div>
+
+                            <div id="containerKendalaKunjungan" style="margin-top:10px;">
+                                <label>Kendala Perjalanan/Pekerjaan (Opsional)</label>
+                                <div style="display: grid; grid-template-columns: 110px 1fr; gap: 10px;">
+                                    <select id="tipeKendala" style="padding: 10px; border: 1px solid var(--border); border-radius: 6px;">
+                                        <option value="">-</option>
+                                        <option value="Macet">Macet</option>
+                                        <option value="Ban Bocor">Ban Bocor</option>
+                                        <option value="Bensin">Bensin/Unit</option>
+                                        <option value="WIP">WIP</option>
+                                        <option value="Lainnya">Lainnya</option>
+                                    </select>
+                                    <input type="text" id="kendalaKunjungan" placeholder="Detail kendala (misal: Macet total di Bandongan)">
+                                </div>
+                            </div>
                         </div>
-                        <!-- FIX: TAHAP 2 - Tombol SELESAI & SIMPAN -->
-                        <button class="btn-primary" onclick="simpanDataFinalKunjungan()" style="margin-top: 15px;"><i class="fa-solid fa-check-double"></i> ✅ SELESAI & SIMPAN</button>
+
+                        <button class="btn-primary" onclick="simpanKunjunganFinal()" id="btnSimpanKunjungan" style="margin-top: 20px;"><i class="fa-solid fa-floppy-disk"></i> <span id="textBtnSimpan">SIMPAN PERJALANAN</span></button>
+                        <button class="btn-outline btn-danger" style="margin-top: 10px; width: 100%;" onclick="batalTiketLokal()"><i class="fa-solid fa-xmark"></i> Batal / Reset</button>
                     </div>
                 </div>
                 
@@ -288,45 +276,7 @@
             </div>
             
             <div id="tab-dashboard" class="content">
-                <!-- FIX: TAHAP 3 - Panel Target Bulanan di paling atas -->
-                <div id="panelTargetBulanan" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 20px; margin-bottom: 20px; color: white;">
-                    <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 16px; font-weight: 700;">📊 Target Bulanan (Siklus Tgl 1 - 1)</h3>
-                    
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                        <!-- Target Kunjungan (Outdoor) -->
-                        <div style="background: rgba(255,255,255,0.15); border-radius: 8px; padding: 12px;">
-                            <div style="font-size: 12px; font-weight: 600; opacity: 0.9; margin-bottom: 8px;">🚗 Kunjungan (Target 5/hari)</div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px;">
-                                <div>
-                                    <div style="font-size: 11px; opacity: 0.8;">Selesai</div>
-                                    <div style="font-size: 18px; font-weight: 700;" id="targetOutdoorSelesai">0</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 11px; opacity: 0.8;">Target</div>
-                                    <div style="font-size: 18px; font-weight: 700;" id="targetOutdoorBerjalan">0</div>
-                                </div>
-                            </div>
-                            <div style="font-size: 12px; font-weight: 600; padding: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; text-align: center;" id="targetOutdoorStatus">Target Berjalan</div>
-                        </div>
-                        
-                        <!-- Target Internal (Indoor) -->
-                        <div style="background: rgba(255,255,255,0.15); border-radius: 8px; padding: 12px;">
-                            <div style="font-size: 12px; font-weight: 600; opacity: 0.9; margin-bottom: 8px;">🔧 Internal / CS (Target 3/hari)</div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px;">
-                                <div>
-                                    <div style="font-size: 11px; opacity: 0.8;">Selesai</div>
-                                    <div style="font-size: 18px; font-weight: 700;" id="targetIndoorSelesai">0</div>
-                                </div>
-                                <div>
-                                    <div style="font-size: 11px; opacity: 0.8;">Target</div>
-                                    <div style="font-size: 18px; font-weight: 700;" id="targetIndoorBerjalan">0</div>
-                                </div>
-                            </div>
-                            <div style="font-size: 12px; font-weight: 600; padding: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; text-align: center;" id="targetIndoorStatus">Target Berjalan</div>
-                        </div>
-                    </div>
-                </div>
-                
+                <!-- FIX: DASHBOARD SIMPLIFIKASI - Hapus panelTargetBulanan -->
                 <!-- Inner Tabs: Hari / Minggu -->
                 <div class="dashboard-inner-tabs" style="display: flex; gap: 10px;">
                     <button class="dashboard-tab-btn active" onclick="switchDashboardTab('hari')" id="tab-hari-btn" style="flex: 1;">
@@ -346,22 +296,38 @@
 
                 <!-- Main Metric Area (Hari View) -->
                 <div id="dashboard-hari-view" class="dashboard-view active">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                        <div class="metric-area" onclick="openTaskHistoryModal()" style="cursor: pointer;">
-                            <h4 class="metric-title">Tugas Selesai</h4>
-                            <div class="metric-value" id="metricValueTugasSelesai">0</div>
-                        </div>
-                        <div class="metric-area" onclick="openKendalaModal()" style="cursor: pointer;">
-                            <h4 class="metric-title">Kendala</h4>
-                            <div class="metric-value" id="metricValueKendala">0</div>
-                        </div>
-                    </div>
-                    
-                    <!-- Weekly Bar Chart (on Hari view) -->
-                    <div class="bar-chart-container" style="margin-top: 10px;">
-                        <canvas id="dailyBarChart" width="90%" height="180"></canvas>
-                    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+        <div class="metric-area" onclick="openTaskHistoryModal()" style="cursor: pointer; padding: 12px 8px;">
+            <h4 class="metric-title" style="font-size: 11px;">Tugas Selesai</h4>
+            <div class="metric-value" id="metricValueTugasSelesai" style="color: var(--primary); font-size: 24px;">0</div>
+        </div>
+        
+        <div class="metric-area" onclick="openKendalaModal()" style="cursor: pointer; padding: 12px 8px;">
+            <h4 class="metric-title" style="font-size: 11px;">Kendala</h4>
+            <div class="metric-value" id="metricValueKendala" style="font-size: 24px;">0</div>
+        </div>
+        
+        <div class="metric-area" style="padding: 10px 8px; display: flex; flex-direction: column; justify-content: space-between; height: 100%; box-sizing: border-box;">
+            <h4 class="metric-title" style="font-size: 11px; margin-bottom: 8px;">Target</h4>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                <div style="background: #f4f6f8; border-radius: 6px; padding: 4px 2px; text-align: center; border: 1px solid #eee;">
+                    <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Hari</div>
+                    <div id="targetHarianSisa" style="font-size: 14px; font-weight: 800; color: var(--primary); line-height: 1.2;">0</div>
                 </div>
+                
+                <div style="background: #f4f6f8; border-radius: 6px; padding: 4px 2px; text-align: center; border: 1px solid #eee;">
+                    <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Bulan</div>
+                    <div id="targetBulananSisa" style="font-size: 14px; font-weight: 800; color: var(--primary); line-height: 1.2;">0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="bar-chart-container" style="margin-top: 10px;">
+        <canvas id="dailyBarChart" width="90%" height="180"></canvas>
+    </div>
+</div>
 
                 <!-- Weekly Bar Chart (Minggu View) -->
                 <div id="dashboard-minggu-view" class="dashboard-view">

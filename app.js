@@ -31,7 +31,8 @@ if (tanggalTerakhirBuka !== formatTanggalCek) {
 }
 
 let logData = JSON.parse(localStorage.getItem('dailyLogTeknisi')) || [];
-let currentState = 'BERANGKAT', aktifTaskId = '', aktifWaktuBerangkat = '', aktifWaktuSampai = '', aktifNamaKlien = '', aktifAlamatKlien = '';
+// FIX: DRAFT TIKET LOKAL - Variabel untuk smart ticket
+let aktifNamaKlien = '', aktifAlamatKlien = '';
 let isSyncing = false;
 let isIstirahat = false, jamMulaiIstirahat = '';
 let selectedDashboardDate = new Date(); // Track selected date for dashboard filtering
@@ -295,8 +296,11 @@ window.onload = function() {
     
     terapkanModePenugasan();
     cekModalNamaHarian();
-    pulihkanStateTiket();
     pulihkanStatusIstirahat();
+    
+    // FIX: PERSISTENCE & LOCK INPUT - Pulihkan draft kunjungan sebelum sync
+    pulihkanDraftKunjungan();
+    
     jalankanSync();
     
     // FIX: TAHAP 3 - Fetch kalender libur saat app load
@@ -402,6 +406,7 @@ function hitungTargetBulanan() {
         console.log('[hitungTargetBulanan] Total combined data (after dedup): ' + allData.length);
         
         // FIX: TAHAP 3 - Filter for completed tasks within cycle period with valid endtime
+        // FIX: EXCLUDE PERJALANAN - Jangan hitung tugas berjenis Perjalanan
         const completedTasks = allData.filter(item => {
             // Check if tanggal is within cycle
             if (!item.tanggal) return false;
@@ -413,47 +418,45 @@ function hitungTargetBulanan() {
             const hasValidJamSelesai = item.jamSelesai && item.jamSelesai !== '-' && item.jamSelesai.trim() !== '';
             const isInRange = itemDate >= effectiveCycleStart && itemDate <= today;
             
-            return hasValidJamSelesai && isInRange;
+            // FIX: EXCLUDE PERJALANAN - Lewati item yang detail-nya include [Perjalanan]
+            const isPerjalanan = item.detail && item.detail.includes('[Perjalanan]');
+            
+            return hasValidJamSelesai && isInRange && !isPerjalanan;
         });
         
-        // FIX: TAHAP 3 - Count by type
+        // FIX: TAHAP 3 - Count by type (exclude perjalanan)
         const outdoorCount = completedTasks.filter(item => item.tipe === 'Kunjungan').length;
         const indoorCount = completedTasks.filter(item => item.tipe === 'Tugas Internal / CS').length;
         
-        console.log('[hitungTargetBulanan] Outdoor completed: ' + outdoorCount + ' | Indoor completed: ' + indoorCount);
+        console.log('[hitungTargetBulanan] Outdoor completed (exclude Perjalanan): ' + outdoorCount + ' | Indoor completed: ' + indoorCount);
         
         // FIX: TAHAP 3 - Calculate hutang (debt)
         const hutangOutdoor = targetOutdoorSeharusnya - outdoorCount;
         const hutangIndoor = targetIndoorSeharusnya - indoorCount;
         
-        // FIX: TAHAP 3 - Update UI
-        document.getElementById('targetOutdoorSelesai').innerText = outdoorCount;
-        document.getElementById('targetOutdoorBerjalan').innerText = targetOutdoorSeharusnya;
-        
-        document.getElementById('targetIndoorSelesai').innerText = indoorCount;
-        document.getElementById('targetIndoorBerjalan').innerText = targetIndoorSeharusnya;
-        
-        // FIX: TAHAP 3 - Update status text and color
-        const outdoorStatusEl = document.getElementById('targetOutdoorStatus');
-        const indoorStatusEl = document.getElementById('targetIndoorStatus');
-        
-        if (hutangOutdoor <= 0) {
-            outdoorStatusEl.innerText = '✅ Target Tercapai/Surplus';
-            outdoorStatusEl.style.background = 'rgba(34, 197, 94, 0.3)';
-        } else {
-            outdoorStatusEl.innerText = '🔴 Hutang: ' + hutangOutdoor + ' Tugas';
-            outdoorStatusEl.style.background = 'rgba(239, 68, 68, 0.3)';
+        // FIX: DASHBOARD SIMPLIFIKASI - Hitung hutang harian & update UI baru
+        // Hitung selesai HARI INI (berdasarkan tanggal dashboard yang dipilih)
+        const day = String(selectedDashboardDate.getDate()).padStart(2, '0');
+        const month = String(selectedDashboardDate.getMonth() + 1).padStart(2, '0');
+        const year = selectedDashboardDate.getFullYear();
+        const selectedDateStr = `${day}/${month}/${year}`;
+
+        const outdoorHariIni = completedTasks.filter(item => item.tipe === 'Kunjungan' && item.tanggal === selectedDateStr).length;
+        const hutangHarian = 5 - outdoorHariIni; // Target harian = 5
+
+        // Update UI Metrik Baru
+        const elHarian = document.getElementById('targetHarianSisa');
+        const elBulanan = document.getElementById('targetBulananSisa');
+
+        if (elHarian && elBulanan) {
+            elHarian.innerText = hutangHarian > 0 ? hutangHarian : 'Lunas';
+            elHarian.style.color = hutangHarian > 0 ? 'var(--primary)' : '#28a745';
+            
+            elBulanan.innerText = hutangOutdoor > 0 ? hutangOutdoor : 'Lunas';
+            elBulanan.style.color = hutangOutdoor > 0 ? 'var(--primary)' : '#28a745';
         }
         
-        if (hutangIndoor <= 0) {
-            indoorStatusEl.innerText = '✅ Target Tercapai/Surplus';
-            indoorStatusEl.style.background = 'rgba(34, 197, 94, 0.3)';
-        } else {
-            indoorStatusEl.innerText = '🔴 Hutang: ' + hutangIndoor + ' Tugas';
-            indoorStatusEl.style.background = 'rgba(239, 68, 68, 0.3)';
-        }
-        
-        console.log('[hitungTargetBulanan] ✓ COMPLETED - Outdoor hutang: ' + hutangOutdoor + ', Indoor hutang: ' + hutangIndoor);
+        console.log('[hitungTargetBulanan] ✓ COMPLETED - Hutang Harian: ' + hutangHarian + ', Hutang Bulanan: ' + hutangOutdoor);
     } catch (err) {
         console.error('[hitungTargetBulanan] ERROR:', err.message);
     }
@@ -530,8 +533,10 @@ async function muatDashboardStats() {
         const noDate = !item.tanggal;
         const dateMatches = item.tanggal === selectedDateStr;
         const hasValidJamSelesai = item.jamSelesai && item.jamSelesai !== '-' && item.jamSelesai.trim() !== '';
+        // FIX: EXCLUDE PERJALANAN - Jangan hitung tugas berjenis Perjalanan
+        const isPerjalanan = item.detail && item.detail.includes('[Perjalanan]');
         
-        if (!isIstirahat && !noDate && dateMatches && hasValidJamSelesai) {
+        if (!isIstirahat && !noDate && dateMatches && hasValidJamSelesai && !isPerjalanan) {
             console.log(`  ✓ Item matched (history): ${item.namaKlien} | Date: ${item.tanggal} | Selesai: ${item.jamSelesai}`);
         }
         
@@ -550,6 +555,10 @@ async function muatDashboardStats() {
             console.log(`  ⏭️ Invalid jamSelesai: ${item.jamSelesai}`);
             return false;
         }
+        if (isPerjalanan) {
+            console.log(`  🚗 Skipped Perjalanan for date ${selectedDateStr}`);
+            return false;
+        }
         return true;
     }).length;
     
@@ -559,8 +568,10 @@ async function muatDashboardStats() {
         const noDate = !item.tanggal;
         const dateMatches = item.tanggal === selectedDateStr;
         const hasValidJamSelesai = item.jamSelesai && item.jamSelesai !== '-' && item.jamSelesai.trim() !== '';
+        // FIX: EXCLUDE PERJALANAN - Jangan hitung tugas berjenis Perjalanan
+        const isPerjalanan = item.detail && item.detail.includes('[Perjalanan]');
         
-        if (!isIstirahat && !noDate && dateMatches && hasValidJamSelesai) {
+        if (!isIstirahat && !noDate && dateMatches && hasValidJamSelesai && !isPerjalanan) {
             console.log(`  ✓ Item matched (daily): ${item.namaKlien} | Date: ${item.tanggal} | Selesai: ${item.jamSelesai}`);
         }
         
@@ -569,6 +580,10 @@ async function muatDashboardStats() {
         if (!dateMatches) return false;
         if (!hasValidJamSelesai) {
             console.log(`  ⏭️ Invalid jamSelesai in daily: ${item.jamSelesai}`);
+            return false;
+        }
+        if (isPerjalanan) {
+            console.log(`  🚗 Skipped Perjalanan in daily`);
             return false;
         }
         return true;
@@ -706,8 +721,13 @@ async function populateDailyChart() {
     console.log(`📅 Today's date string: "${todayStr}"`);
     
     // Filter dailyLogTeknisi untuk hanya hari ini dan gabung dengan logData
-    const todayDailyTasks = dailyLogData.filter(item => item.tanggal === todayStr && item.tipe !== 'ISTIRAHAT');
-    console.log(`📝 Today's daily tasks (filtered): ${todayDailyTasks.length} items`);
+    const todayDailyTasks = dailyLogData.filter(item => {
+        const isToday = item.tanggal === todayStr && item.tipe !== 'ISTIRAHAT';
+        // FIX: EXCLUDE PERJALANAN - Jangan tampilkan tugas berjenis Perjalanan di chart
+        const isPerjalanan = item.detail && item.detail.includes('[Perjalanan]');
+        return isToday && !isPerjalanan;
+    });
+    console.log(`📝 Today's daily tasks (filtered exclude Perjalanan): ${todayDailyTasks.length} items`);
     if (todayDailyTasks.length > 0) {
         console.log(`📋 Today's tasks sample:`, todayDailyTasks.slice(0, 3));
     }
@@ -905,8 +925,13 @@ async function populateWeeklyChart() {
     console.log(`📅 Today's date string: "${todayStr}"`);
     
     // Filter dailyLogTeknisi untuk hanya hari ini dan gabung dengan logData
-    const todayDailyTasks = dailyLogData.filter(item => item.tanggal === todayStr && item.tipe !== 'ISTIRAHAT');
-    console.log(`📝 Today's daily tasks (filtered): ${todayDailyTasks.length} items`);
+    const todayDailyTasks = dailyLogData.filter(item => {
+        const isToday = item.tanggal === todayStr && item.tipe !== 'ISTIRAHAT';
+        // FIX: EXCLUDE PERJALANAN - Jangan tampilkan tugas berjenis Perjalanan di chart
+        const isPerjalanan = item.detail && item.detail.includes('[Perjalanan]');
+        return isToday && !isPerjalanan;
+    });
+    console.log(`📝 Today's daily tasks (filtered exclude Perjalanan): ${todayDailyTasks.length} items`);
     if (todayDailyTasks.length > 0) {
         console.log(`📋 Today's tasks sample:`, todayDailyTasks.slice(0, 3));
     }
@@ -969,6 +994,13 @@ async function populateWeeklyChart() {
         itemsProcessed++;
         if (item.tipe === 'ISTIRAHAT') {
             console.log(`  ⏸️ [${idx}] Skipped ISTIRAHAT: ${item.tanggal}`);
+            itemsSkipped++;
+            return;
+        }
+        // FIX: EXCLUDE PERJALANAN - Jangan hitung tugas berjenis Perjalanan
+        const isPerjalanan = item.detail && item.detail.includes('[Perjalanan]');
+        if (isPerjalanan) {
+            console.log(`  🚗 [${idx}] Skipped Perjalanan: ${item.tanggal}`);
             itemsSkipped++;
             return;
         }
@@ -1492,6 +1524,10 @@ async function updateWeeklyMetrics() {
     logData.forEach(item => {
         if (item.tipe === 'ISTIRAHAT' || !item.tanggal) return;
         
+        // FIX: EXCLUDE PERJALANAN - Jangan hitung tugas berjenis Perjalanan
+        const isPerjalanan = item.detail && item.detail.includes('[Perjalanan]');
+        if (isPerjalanan) return;
+        
         // Parse date
         const dateParts = item.tanggal.split('/');
         if (dateParts.length !== 3) return;
@@ -1511,6 +1547,10 @@ async function updateWeeklyMetrics() {
     // Count dari daily log
     dailyLogData.forEach(item => {
         if (item.tipe === 'ISTIRAHAT' || !item.tanggal) return;
+        
+        // FIX: EXCLUDE PERJALANAN - Jangan hitung tugas berjenis Perjalanan
+        const isPerjalanan = item.detail && item.detail.includes('[Perjalanan]');
+        if (isPerjalanan) return;
         
         const dateParts = item.tanggal.split('/');
         if (dateParts.length !== 3) return;
@@ -1615,12 +1655,18 @@ function populateTaskHistory() {
         const hasNoDate = !item.tanggal;
         const dateMatch = item.tanggal === selectedDateStr;
         const hasValidJamSelesai = item.jamSelesai && item.jamSelesai !== '-' && item.jamSelesai.trim() !== '';
+        // FIX: EXCLUDE PERJALANAN - Jangan tampilkan tugas berjenis Perjalanan di history
+        const isPerjalanan = item.detail && item.detail.includes('[Perjalanan]');
         
-        console.log(`  Checking: ${item.namaKlien || 'Unknown'} | Tipe: ${item.tipe} | Date: ${item.tanggal} | JamSelesai: ${item.jamSelesai} | Match: ${dateMatch && hasValidJamSelesai}`);
+        console.log(`  Checking: ${item.namaKlien || 'Unknown'} | Tipe: ${item.tipe} | Date: ${item.tanggal} | JamSelesai: ${item.jamSelesai} | Match: ${dateMatch && hasValidJamSelesai && !isPerjalanan}`);
         
         if (item.tipe === 'ISTIRAHAT') return false;
         if (!item.tanggal) return false;
         if (!dateMatch) return false;
+        if (isPerjalanan) {
+            console.log(`    🚗 Skipped Perjalanan: ${item.namaKlien}`);
+            return false;
+        }
         return hasValidJamSelesai;
     });
     
@@ -2617,7 +2663,6 @@ function updateBtnTemaUI(isDark) {
 function gantiMode(elemen) {
     const tipeLama = localStorage.getItem('logSettingTipe') || 'Kunjungan', tipeBaru = elemen.value;
     if (tipeLama !== tipeBaru) {
-        if(currentState !== 'BERANGKAT' && tipeLama === 'Kunjungan') { alert('Selesaikan tugas kunjungan aktif terlebih dahulu!'); document.getElementById('modeLapangan').checked = true; return; }
         if(confirm('Yakin ubah mode ke ' + tipeBaru + '?')) { localStorage.setItem('logSettingTipe', tipeBaru); terapkanModePenugasan(); } 
         else { document.getElementById(tipeLama === 'Kunjungan' ? 'modeLapangan' : 'modeCS').checked = true; }
     }
@@ -2648,215 +2693,247 @@ function setWaktuSekarang(idInput) { document.getElementById(idInput).value = ge
 // FIX: TAHAP 2 - HAPUS: Fungsi eksekusiFase() - diganti dengan handler button-based
 // function eksekusiFase() { ... }
 
-// FIX: TAHAP 2 - Activity Tracker Button Handlers
-function klikTombolPersiapan() {
-    currentState = 'STANDBY';
-    aktifTaskId = aktifWaktuBerangkat = aktifWaktuSampai = aktifNamaKlien = aktifAlamatKlien = '';
-    document.getElementById('namaCustomer').value = document.getElementById('alamatCustomer').value = '';
-    document.getElementById('detailKunjungan').value = document.getElementById('kendalaKunjungan').value = '';
-    document.getElementById('tipeKendala').value = '';
-    localStorage.removeItem('tiketTugasAktif');
-    renderUIBerdasarkanState();
-}
+// ==============================================
+// FIX: PERSISTENCE & LOCK INPUT - DRAFT KUNJUNGAN
+// ==============================================
 
-function klikTombolMulaiPerjalanan() {
-    aktifNamaKlien = document.getElementById('namaCustomer').value;
-    aktifAlamatKlien = document.getElementById('alamatCustomer').value;
-    if (!aktifNamaKlien || !aktifAlamatKlien) { alert('⚠️ Isi Nama Customer & Alamatnya terlebih dahulu!'); return; }
-    
-    aktifWaktuBerangkat = getWaktuSekarang();
-    aktifTaskId = "T" + Date.now();
-    currentState = 'PERJALANAN'; // Status berubah jadi di jalan
-    simpanStateTiket();
-    kirimDataParsial('simpan_berangkat');
-    stopReminderLoop();
-}
-
-function klikTombolMulaiPengerjaan() {
-    aktifWaktuSampai = getWaktuSekarang();
-    currentState = 'KERJA'; // Status berubah jadi sedang pegang alat
-    simpanStateTiket();
-    kirimDataParsial('update_sampai');
-}
-
-function kirimDataParsial(aksi) {
-    const payload = { action: aksi, taskId: aktifTaskId, nama: localStorage.getItem('logSettingNama'), tanggal: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }), tipe: 'Kunjungan', namaKlien: aktifNamaKlien, alamatKlien: aktifAlamatKlien, app_version: APP_VERSION }; // FIX: TAMBAH VERSI APLIKASI
-    if (aksi === 'simpan_berangkat') payload.jamBerangkat = aktifWaktuBerangkat;
-    if (aksi === 'update_sampai') payload.jamSampai = aktifWaktuSampai;
-    let antrean = JSON.parse(localStorage.getItem('antreanLog')) || []; antrean.push(payload); safeSaveToStorage('antreanLog', JSON.stringify(antrean));
-    jalankanSync();
-}
-
-function simpanStateTiket() { localStorage.setItem('tiketTugasAktif', JSON.stringify({ state: currentState, taskId: aktifTaskId, waktuBerangkat: aktifWaktuBerangkat, waktuSampai: aktifWaktuSampai, namaKlien: aktifNamaKlien, alamatKlien: aktifAlamatKlien })); renderUIBerdasarkanState(); }
-function pulihkanStateTiket() { const t = JSON.parse(localStorage.getItem('tiketTugasAktif')); if (t) { currentState = t.state; aktifTaskId = t.taskId || ''; aktifWaktuBerangkat = t.waktuBerangkat; aktifWaktuSampai = t.waktuSampai; aktifNamaKlien = t.namaKlien; aktifAlamatKlien = t.alamatKlien; renderUIBerdasarkanState(); } }
-function batalTiket() {
-    if(confirm('Batalkan tugas ini? Data di server akan ikut dihapus permanen.')) {
-        
-        // --- TAMBAHAN BARU: Perintah hapus baris di Spreadsheet ---
-        if (aktifTaskId !== '') {
-            let antrean = JSON.parse(localStorage.getItem('antreanLog')) || [];
-            antrean.push({
-                action: "delete_task",
-                taskId: aktifTaskId,
-                nama: localStorage.getItem('logSettingNama')
-            });
-            safeSaveToStorage('antreanLog', JSON.stringify(antrean));
-            jalankanSync(); // Eksekusi penghapusan di background
-        }
-        // -----------------------------------------------------------
-
-        localStorage.removeItem('tiketTugasAktif'); 
-        currentState = 'BERANGKAT'; 
-        aktifTaskId = aktifWaktuBerangkat = aktifWaktuSampai = aktifNamaKlien = aktifAlamatKlien = '';
-        document.getElementById('namaCustomer').value = document.getElementById('alamatCustomer').value = document.getElementById('detailKunjungan').value = document.getElementById('kendalaKunjungan').value = ''; document.getElementById('tipeKendala').value = '';
-        renderUIBerdasarkanState();
-    }
-}
-
-function renderUIBerdasarkanState() {
-    // 1. Area Form Input Customer
-    document.getElementById('formCustomerArea').style.display = (currentState === 'BERANGKAT' || currentState === 'STANDBY') ? 'block' : 'none';
-    
-    // 2. Visibilitas Panel 3 Tombol Utama
-    const panelAktivitas = document.getElementById('panelAktivitas');
-    if (panelAktivitas) {
-        // Jangan sembunyikan panel jika sedang di jalan (PERJALANAN). Sembunyikan kalau sudah SELESAI.
-        panelAktivitas.style.display = (currentState === 'SELESAI' || currentState === 'KERJA') ? 'none' : 'block';
-        
-        const btnStandby = document.getElementById('btnPersiapan');
-        const btnJalan = document.getElementById('btnMulaiPerjalanan');
-        const btnKerja = document.getElementById('btnMulaiPengerjaan');
-        
-        if (btnStandby) btnStandby.style.display = (currentState === 'BERANGKAT' || currentState === 'STANDBY') ? 'block' : 'none';
-        if (btnJalan) btnJalan.style.display = (currentState === 'BERANGKAT' || currentState === 'STANDBY') ? 'block' : 'none';
-        // Tombol Tiba HANYA muncul saat sedang PERJALANAN
-        if (btnKerja) btnKerja.style.display = currentState === 'PERJALANAN' ? 'block' : 'none';
+function pulihkanDraftKunjungan() {
+    const draftStr = localStorage.getItem('activeVisitDraft');
+    if (!draftStr) {
+        console.log('[pulihkanDraftKunjungan] Tidak ada draft ditemukan');
+        return;
     }
 
-    // 3. Area Tiket Aktif (Warna Merah)
-    if (currentState !== 'BERANGKAT' && currentState !== 'STANDBY') {
-        document.getElementById('tiketPerjalanan').style.display = 'block'; 
-        document.getElementById('tiketInfoArea').innerHTML = `Menuju: <strong>${aktifNamaKlien}</strong><br>Lokasi: ${aktifAlamatKlien}`; 
-        document.getElementById('tiketWaktuBerangkat').innerText = aktifWaktuBerangkat;
+    try {
+        const draft = JSON.parse(draftStr);
+        console.log('[pulihkanDraftKunjungan] Draft ditemukan, memulihkan...');
         
-        const elS = document.getElementById('tiketWaktuSampai');
-        if(currentState === 'KERJA' || currentState === 'SELESAI') { 
-            elS.innerText = aktifWaktuSampai; 
-            elS.style.color = 'var(--primary)'; 
-        } else { 
-            elS.innerText = '--:--'; 
-            elS.style.color = '#adb5bd'; 
-        }
-
-        // Jika sedang KERJA, buat tombol khusus Selesai di bawah tiket
-        let btnSelesaiUI = document.getElementById('btnPanggilFormSelesai');
-        if (currentState === 'KERJA') {
-            if (!btnSelesaiUI) {
-                btnSelesaiUI = document.createElement('button');
-                btnSelesaiUI.id = 'btnPanggilFormSelesai';
-                btnSelesaiUI.className = 'btn-primary';
-                btnSelesaiUI.style.marginTop = '15px';
-                btnSelesaiUI.innerHTML = '<i class="fa-solid fa-clipboard-check"></i> Pekerjaan Selesai (Isi Laporan)';
-                btnSelesaiUI.onclick = tampilkanFormSelesai;
-                document.getElementById('tiketPerjalanan').appendChild(btnSelesaiUI);
-            }
-            btnSelesaiUI.style.display = 'block';
+        // Isi kembali input nama & alamat
+        document.getElementById('namaCustomer').value = draft.nama || '';
+        document.getElementById('alamatCustomer').value = draft.alamat || '';
+        
+        // Lock input
+        document.getElementById('namaCustomer').disabled = true;
+        document.getElementById('alamatCustomer').disabled = true;
+        
+        // Simpan ke variabel global
+        aktifNamaKlien = draft.nama;
+        aktifAlamatKlien = draft.alamat;
+        
+        // Tampilkan area aktivitas, sembunyikan tombol mulai
+        document.getElementById('btnMulaiKunjungan').style.display = 'none';
+        document.getElementById('areaAktivitasTugas').style.display = 'block';
+        
+        // Set tab ke jenis yang disimpan (default Perjalanan jika tidak ada)
+        const jenis = draft.jenis || 'Perjalanan';
+        const tabBtn = document.getElementById('tab' + jenis.charAt(0).toUpperCase() + jenis.slice(1));
+        if (tabBtn) {
+            pilihTabKunjungan(tabBtn, jenis);
         } else {
-            if (btnSelesaiUI) btnSelesaiUI.style.display = 'none';
+            // Fallback ke tab Perjalanan jika tombol tidak ditemukan
+            pilihTabKunjungan(document.querySelector('.btn-tab-logic'), 'Perjalanan');
         }
-    } else { 
-        document.getElementById('tiketPerjalanan').style.display = 'none'; 
+        
+        // Set jam mulai dari draft
+        document.getElementById('jamMulaiKunjungan').value = draft.jamMulai || getWaktuSekarang();
+        
+        console.log('[pulihkanDraftKunjungan] ✓ Draft berhasil dipulihkan untuk:', draft.nama, draft.alamat);
+    } catch (e) {
+        console.error('[pulihkanDraftKunjungan] Error parsing draft:', e);
+        localStorage.removeItem('activeVisitDraft');
     }
-    
-    // 4. Form Laporan (Edit Jam Manual)
-    document.getElementById('formDetailArea').style.display = currentState === 'SELESAI' ? 'block' : 'none';
 }
 
 // ==============================================
-// FIX: TAHAP 2 - FUNGSI TAMPILKAN FORM SELESAI
+// FIX: DRAFT TIKET LOKAL - TAB SYSTEM & SMART TICKET LOGIC
 // ==============================================
-function tampilkanFormSelesai() {
-    // FIX: TAHAP 2 - Pre-fill input waktu dengan nilai dari state
-    document.getElementById('jamBerangkatEdit').value = aktifWaktuBerangkat || '';
-    document.getElementById('jamSampaiEdit').value = aktifWaktuSampai || '';
-    document.getElementById('jamSelesaiEdit').value = getWaktuSekarang();
+
+function pilihTabKunjungan(btn, nilai) {
+    document.querySelectorAll('.btn-tab-logic').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('jenisAktivitasKunjungan').value = nilai;
     
-    // Clear form fields
+    const wrapper = document.getElementById('wrapperDetailKunjungan');
+    const containerDetail = document.getElementById('containerDetailManual');
+    const containerKendala = document.getElementById('containerKendalaKunjungan');
+
+    // Selalu tampilkan wrapper utama
+    wrapper.style.display = 'block'; 
+
+    if (nilai === 'Perjalanan') {
+        // Sembunyikan Detail, Tampilkan Kendala
+        containerDetail.style.display = 'none';
+        containerKendala.style.display = 'block';
+    } else {
+        // Tampilkan Detail & Kendala
+        containerDetail.style.display = 'block';
+        containerKendala.style.display = 'block';
+        document.getElementById('labelDetail').innerText = nilai === 'Lainnya' ? 'Keterangan Lainnya' : 'Detail Pekerjaan';
+    }
+    
+    // FIX: UPDATE TEKS TOMBOL SIMPAN - Ubah berdasarkan tab aktif
+    const textBtnSimpan = document.getElementById('textBtnSimpan');
+    if (nilai === 'Perjalanan') {
+        textBtnSimpan.innerText = 'SIMPAN PERJALANAN';
+    } else if (nilai === 'Mengerjakan') {
+        textBtnSimpan.innerText = 'SIMPAN KERJAAN';
+    } else if (nilai === 'Lainnya') {
+        textBtnSimpan.innerText = 'SIMPAN DATA';
+    }
+    
+    // FIX: PERSISTENCE & LOCK INPUT - Update draft di localStorage agar saat refresh posisi tab tersimpan
+    let draft = JSON.parse(localStorage.getItem('activeVisitDraft')) || {};
+    draft.jenis = nilai;
+    localStorage.setItem('activeVisitDraft', JSON.stringify(draft));
+    
+    console.log('[pilihTabKunjungan] Tab dipilih:', nilai, '| containerDetail:', containerDetail.style.display, 'containerKendala:', containerKendala.style.display);
+}
+
+function buatTiketKunjungan() {
+    aktifNamaKlien = document.getElementById('namaCustomer').value.trim();
+    aktifAlamatKlien = document.getElementById('alamatCustomer').value.trim();
+    
+    if (!aktifNamaKlien || !aktifAlamatKlien) { 
+        alert('⚠️ Isi Nama Customer & Area/Alamat terlebih dahulu!'); 
+        return; 
+    }
+
+    // FIX: PERSISTENCE & LOCK INPUT - Lock input field dan simpan ke localStorage
+    document.getElementById('namaCustomer').disabled = true;
+    document.getElementById('alamatCustomer').disabled = true;
+    
+    const jamMulaiSekarang = getWaktuSekarang();
+    const draftData = {
+        nama: aktifNamaKlien,
+        alamat: aktifAlamatKlien,
+        jamMulai: jamMulaiSekarang,
+        jenis: 'Perjalanan',
+        timestamp: new Date().getTime()
+    };
+    localStorage.setItem('activeVisitDraft', JSON.stringify(draftData));
+    
+    // Tampilkan area aktivitas tugas, sembunyikan tombol mulai
+    document.getElementById('btnMulaiKunjungan').style.display = 'none';
+    document.getElementById('areaAktivitasTugas').style.display = 'block';
+    
+    // Set default ke tab Perjalanan dan atur jam mulai otomatis
+    const firstTab = document.querySelector('.btn-tab-logic');
+    pilihTabKunjungan(firstTab, 'Perjalanan');
+    document.getElementById('jamMulaiKunjungan').value = jamMulaiSekarang;
+    document.getElementById('jamSelesaiKunjungan').value = '';
     document.getElementById('detailKunjungan').value = '';
     document.getElementById('kendalaKunjungan').value = '';
     document.getElementById('tipeKendala').value = '';
     
-    console.log('[tampilkanFormSelesai] Pre-filled times: berangkat=' + aktifWaktuBerangkat + ', sampai=' + aktifWaktuSampai + ', selesai=' + getWaktuSekarang());
+    console.log('[buatTiketKunjungan] Tiket dibuat untuk:', aktifNamaKlien, aktifAlamatKlien, '| Draft disimpan ke localStorage');
 }
 
-// ==============================================
-// FUNGSI PENGIRIMAN DATA FINAL
-// ==============================================
-function simpanDataFinalKunjungan() {
-    // FIX: TAHAP 2 - Ambil waktu dari input yang bisa diedit user, bukan dari variable otomatis
-    const jamBerangkatEdit = document.getElementById('jamBerangkatEdit').value;
-    const jamSampaiEdit = document.getElementById('jamSampaiEdit').value;
-    const jamSelesaiEdit = document.getElementById('jamSelesaiEdit').value;
-    
-    if (!document.getElementById('detailKunjungan').value.trim()) {
-        alert('⚠️ Isi Detail Pekerjaan terlebih dahulu!');
-        return;
+function batalTiketLokal() {
+    if(confirm('Yakin ingin membatalkan tiket ini? Data belum dikirim ke server.')) {
+        // FIX: PERSISTENCE & LOCK INPUT - Hapus draft dan enable input kembali
+        localStorage.removeItem('activeVisitDraft');
+        
+        document.getElementById('namaCustomer').value = '';
+        document.getElementById('alamatCustomer').value = '';
+        document.getElementById('namaCustomer').disabled = false;
+        document.getElementById('alamatCustomer').disabled = false;
+        
+        document.getElementById('btnMulaiKunjungan').style.display = 'block';
+        document.getElementById('areaAktivitasTugas').style.display = 'none';
+        
+        aktifNamaKlien = '';
+        aktifAlamatKlien = '';
+        console.log('[batalTiketLokal] Tiket dibatalkan, draft dihapus, kembali ke form awal');
     }
-    
-    if (!jamBerangkatEdit || !jamSampaiEdit || !jamSelesaiEdit) {
-        alert('⚠️ Isi semua waktu (Berangkat, Tiba, Selesai)!');
-        return;
-    }
-    
-    // Combine kendala: tipeKendala + kendalaKunjungan
+}
+
+function simpanKunjunganFinal() {
+    const jenis = document.getElementById('jenisAktivitasKunjungan').value;
+    const jamMulai = document.getElementById('jamMulaiKunjungan').value;
+    const jamSelesai = document.getElementById('jamSelesaiKunjungan').value;
+    let detail = document.getElementById('detailKunjungan').value.trim();
     const tipeKendala = document.getElementById('tipeKendala').value;
-    const detailKendala = document.getElementById('kendalaKunjungan').value.trim();
-    let kendalaGabung = '';
-    
-    if (tipeKendala && detailKendala) {
-        kendalaGabung = `${tipeKendala} - ${detailKendala}`;
-    } else if (tipeKendala) {
-        kendalaGabung = tipeKendala;
-    } else if (detailKendala) {
-        kendalaGabung = detailKendala;
-    }
-    
-    // FIX: TAHAP 2 - Gunakan waktu dari input edit, bukan variable otomatis
-    const payloadTugas = { 
-        action: 'update_selesai', 
-        taskId: aktifTaskId, 
-        jamBerangkat: jamBerangkatEdit,  // Dari input jamBerangkatEdit
-        jamSampai: jamSampaiEdit,        // Dari input jamSampaiEdit
-        jamSelesai: jamSelesaiEdit,      // Dari input jamSelesaiEdit
+    const teksKendala = document.getElementById('kendalaKunjungan').value.trim();
+    const kendalaGabung = (tipeKendala && teksKendala) ? `${tipeKendala} - ${teksKendala}` : (tipeKendala || teksKendala || "");
+
+    // Validasi dasar
+    if (!jamMulai || !jamSelesai) { alert('⚠️ Jam Mulai dan Selesai wajib diisi!'); return; }
+    if (jamMulai > jamSelesai) { alert('⚠️ Jam Mulai tidak boleh lebih malam dari Jam Selesai!'); return; }
+    if (jenis !== 'Perjalanan' && !detail) { alert('⚠️ Detail pekerjaan wajib diisi!'); return; }
+
+    const payload = { 
+        action: 'simpan', 
+        taskId: "T" + Date.now(), 
+        jamBerangkat: jamMulai,
+        jamSampai: jamMulai,
+        jamSelesai: jamSelesai,
         tipe: 'Kunjungan', 
         namaKlien: aktifNamaKlien, 
         alamatKlien: aktifAlamatKlien, 
-        detail: document.getElementById('detailKunjungan').value, 
+        detail: jenis === 'Perjalanan' ? "[Perjalanan]" : `[${jenis}] ${detail}`, 
         kendala: kendalaGabung,
         nama: localStorage.getItem('logSettingNama'),
         tanggal: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-        app_version: APP_VERSION // FIX: TAMBAH VERSI APLIKASI
+        app_version: APP_VERSION
     };
+
+    const btn = document.getElementById('btnSimpanKunjungan');
+
+    console.log('[simpanKunjunganFinal] Payload:', payload);
     
-    // AUDIT FIX 3.1: Reset state SEBELUM request GPS (data sudah aman di queue)
-    console.log('[simpanDataFinalKunjungan] Resetting UI state untuk Kunjungan');
-    sliderContainer.classList.remove('disabled'); 
-    sliderText.innerText = 'Geser Mulai Perjalanan >>';
-    localStorage.removeItem('tiketTugasAktif'); 
-    document.getElementById('namaCustomer').value = '';
-    document.getElementById('alamatCustomer').value = '';
-    document.getElementById('detailKunjungan').value = '';
-    document.getElementById('kendalaKunjungan').value = '';
-    document.getElementById('tipeKendala').value = '';
-    currentState = 'BERANGKAT'; 
-    aktifTaskId = '';
-    renderUIBerdasarkanState();
+    // FIX: ALUR BERANTAI - Logika berbeda untuk Perjalanan vs Mengerjakan/Lainnya
+    if (jenis === 'Perjalanan') {
+        // ALUR BERANTAI: Perjalanan -> Mengerjakan
+        // GPS berjalan di background, tombol tidak perlu dikunci
+        console.log('[simpanKunjunganFinal] ALUR BERANTAI: Pindah ke Mengerjakan setelah Perjalanan');
+        
+        // Kirim data ke fungsi GPS (akan diproses di background tanpa blocking)
+        mintaGPSDanSimpan(payload);
+        
+        // Pindah ke Mengerjakan langsung tanpa delay
+        const nextTab = document.getElementById('tabMengerjakan');
+        pilihTabKunjungan(nextTab, 'Mengerjakan');
+        
+        // Jam mulai kerja = jam selesai perjalanan
+        document.getElementById('jamMulaiKunjungan').value = jamSelesai;
+        document.getElementById('jamSelesaiKunjungan').value = '';
+        document.getElementById('detailKunjungan').value = '';
+        document.getElementById('kendalaKunjungan').value = '';
+        document.getElementById('tipeKendala').value = '';
+        
+        alert('✓ Perjalanan disimpan. Silakan lanjut mencatat pekerjaan.');
+        tampilkanLog();
+    } else {
+        // SELESAI TOTAL: Reset aplikasi untuk Mengerjakan atau Lainnya
+        // Kunci tombol selama GPS lookup
+        console.log('[simpanKunjunganFinal] SELESAI TOTAL: Reset aplikasi');
+        
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> MENCARI GPS...'; 
+        btn.disabled = true;
+        
+        // Kirim data ke fungsi GPS (akan diproses di background)
+        mintaGPSDanSimpan(payload);
+        
+        localStorage.removeItem('activeVisitDraft');
+        
+        const inputNama = document.getElementById('namaCustomer');
+        const inputAlamat = document.getElementById('alamatCustomer');
+        inputNama.value = '';
+        inputAlamat.value = '';
+        inputNama.disabled = false;
+        inputAlamat.disabled = false;
+
+        document.getElementById('btnMulaiKunjungan').style.display = 'block';
+        document.getElementById('areaAktivitasTugas').style.display = 'none';
+
+        btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> <span id="textBtnSimpan">SIMPAN PERJALANAN</span>';
+        btn.disabled = false;
+        
+        alert('✓ Tugas selesai dan disimpan.');
+        tampilkanLog();
+    }
     
-    // AUDIT FIX 3.1: Minta GPS dan simpan ke antrean (async)
-    mintaGPSDanSimpan(payloadTugas);
-    
-    // Refresh display segera (sebelum sync)
-    tampilkanLog();
+    console.log('[simpanKunjunganFinal] ✓ Alur berantai dijalankan, GPS diproses di background');
 }
 
 function simpanDataInternal() {
@@ -2917,6 +2994,11 @@ function mintaGPSDanSimpan(payload) {
     antrean.push(payloadWithPendingGPS);
     safeSaveToStorage('antreanLog', JSON.stringify(antrean));
     
+    // FIX: SINKRONISASI LOKAL - Push juga ke logData agar langsung tampil di timeline
+    logData.push(payloadWithPendingGPS);
+    safeSaveToStorage('dailyLogTeknisi', JSON.stringify(logData));
+    tampilkanLog(); // Refresh UI timeline seketika
+    
     // Now request GPS and update the last queued item with actual GPS data
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
@@ -2952,6 +3034,20 @@ function updateGPSInQueue(gpsData, originalPayload) {
             
             console.log('[updateGPSInQueue] ✓ Updated GPS for item at index ' + i);
             
+            // FIX: SINKRONISASI LOKAL - Update GPS di timeline lokal juga
+            let timelineUpdated = false;
+            for (let j = logData.length - 1; j >= 0; j--) {
+                if (logData[j].gps === "Menunggu..." && logData[j].action === originalPayload.action) {
+                    logData[j].gps = gpsData;
+                    timelineUpdated = true;
+                    break;
+                }
+            }
+            if (timelineUpdated) {
+                safeSaveToStorage('dailyLogTeknisi', JSON.stringify(logData));
+                tampilkanLog(); // Refresh UI timeline seketika
+            }
+            
             // Trigger sync setelah GPS update
             jalankanSync();
             return;
@@ -2962,33 +3058,120 @@ function updateGPSInQueue(gpsData, originalPayload) {
 }
 
 function eksekusiSimpanGPS(gps, payload) {
+    // FIX: SIMPLIFIKASI KUNJUNGAN - Update pengecekan tipe untuk include Kunjungan
     const dataBaru = { action: payload.action || "simpan", nama: localStorage.getItem('logSettingNama'), tanggal: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }), gps: gps, ...payload };
     
-    if (payload.tipe === 'Tugas Internal / CS' || payload.action === 'update_selesai') {
+    if (payload.tipe === 'Tugas Internal / CS' || payload.tipe === 'Kunjungan' || payload.action === 'update_selesai') {
         logData.push(dataBaru); safeSaveToStorage('dailyLogTeknisi', JSON.stringify(logData));
     }
 
     let antrean = JSON.parse(localStorage.getItem('antreanLog')) || []; antrean.push(dataBaru); safeSaveToStorage('antreanLog', JSON.stringify(antrean));
     
+    // FIX: PERSISTENCE & LOCK INPUT - Reset UI kunjungan dan cleanup draft
     if (payload.tipe === 'Kunjungan') {
-        localStorage.removeItem('tiketTugasAktif'); document.getElementById('namaCustomer').value = document.getElementById('alamatCustomer').value = document.getElementById('detailKunjungan').value = document.getElementById('kendalaKunjungan').value = ''; document.getElementById('tipeKendala').value = '';
-        currentState = 'BERANGKAT'; aktifTaskId = ''; sliderContainer.classList.remove('disabled'); renderUIBerdasarkanState();
+        // Hapus draft dari localStorage
+        localStorage.removeItem('activeVisitDraft');
+        
+        // Reset input fields
+        document.getElementById('namaCustomer').value = '';
+        document.getElementById('alamatCustomer').value = '';
+        document.getElementById('namaCustomer').disabled = false;
+        document.getElementById('alamatCustomer').disabled = false;
+        
+        // Tampilkan tombol mulai, sembunyikan area aktivitas
+        document.getElementById('btnMulaiKunjungan').style.display = 'block';
+        document.getElementById('areaAktivitasTugas').style.display = 'none';
+        
+        // Reset form fields di dalam area aktivitas
+        document.getElementById('jamMulaiKunjungan').value = '';
+        document.getElementById('jamSelesaiKunjungan').value = '';
+        document.getElementById('detailKunjungan').value = '';
+        document.getElementById('kendalaKunjungan').value = '';
+        document.getElementById('tipeKendala').value = '';
+        
+        const btn = document.getElementById('btnSimpanKunjungan');
+        if(btn) {
+            btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> SIMPAN TUGAS';
+            btn.disabled = false;
+        }
+        
+        console.log('[eksekusiSimpanGPS] ✓ Kunjungan saved, draft cleared, form reset');
     } else {
         document.getElementById('jamMulaiInternal').value = document.getElementById('jamSelesaiInternal').value = document.getElementById('detailInternal').value = document.getElementById('kendalaInternal').value = ''; 
-        document.getElementById('btnSimpanInternal').innerHTML = '<i class="fa-solid fa-floppy-disk"></i> SIMPAN TUGAS INTERNAL'; document.getElementById('btnSimpanInternal').disabled = false;
+        document.getElementById('btnSimpanInternal').innerHTML = '<i class="fa-solid fa-floppy-disk"></i> SIMPAN TUGAS INTERNAL'; 
+        document.getElementById('btnSimpanInternal').disabled = false;
     }
     tampilkanLog(); jalankanSync();
 }
 
 function tampilkanLog() {
-    const list = document.getElementById('listLog'), exportArea = document.getElementById('exportArea'); list.innerHTML = '';
-    if (logData.length === 0) { list.innerHTML = '<div class="empty-state">Belum ada riwayat pekerjaan selesai hari ini.</div>'; exportArea.style.display = 'none'; return; }
+    const list = document.getElementById('listLog');
+    const exportArea = document.getElementById('exportArea'); 
+    list.innerHTML = '';
+    
+    if (logData.length === 0) { 
+        list.innerHTML = '<div class="empty-state">Belum ada riwayat pekerjaan selesai hari ini.</div>'; 
+        exportArea.style.display = 'none'; 
+        return; 
+    }
+    
     exportArea.style.display = 'block';
+    
     [...logData].reverse().forEach((log) => {
         const li = document.createElement('li');
-        let kHtml = log.kendala ? `<div class="timeline-desc" style="color: var(--primary); font-weight: 600; margin-top: 4px;"><i class="fa-solid fa-triangle-exclamation"></i> Kendala: ${log.kendala}</div>` : '';
-        let teksJam = log.tipe === 'Kunjungan' ? `Berangkat: ${log.jamBerangkat} &nbsp;|&nbsp; Tiba: ${log.jamSampai} &nbsp;|&nbsp; Selesai: ${log.jamSelesai}` : `Mulai: ${log.jamSampai} &nbsp;|&nbsp; Selesai: ${log.jamSelesai}`;
-        li.innerHTML = `<div class="timeline-time"><i class="fa-regular fa-clock"></i> ${teksJam}</div><div class="timeline-title">${log.namaKlien || "-"} <span style="font-weight: normal; font-size: 12px; color: var(--text-muted);">| ${log.alamatKlien || "-"}</span></div><div class="timeline-desc">${log.detail}</div>${kHtml}<div class="timeline-gps"><i class="fa-solid fa-location-dot"></i> ${log.gps}</div>`;
+        const isPerjalanan = log.detail && log.detail.includes('[Perjalanan]');
+        const hasKendala = log.kendala && log.kendala.trim() !== '' && log.kendala.trim() !== '-';
+
+        if (isPerjalanan) {
+            // UI KHUSUS PERJALANAN (Compact, Mendatar, Tanpa Border Kiri)
+            li.className = 'item-perjalanan';
+            
+            let kendalaHtml = hasKendala ? 
+                `<div style="color: var(--primary); font-weight: 600; display: inline-flex; align-items: center; gap: 4px;"><i class="fa-solid fa-triangle-exclamation"></i> ${log.kendala}</div>` : '';
+            
+            li.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 4px;">
+                    <div style="font-weight: 600; font-size: 13px; color: var(--text-main);">
+                        <i class="fa-solid fa-motorcycle" style="color: var(--text-muted); margin-right: 6px;"></i>${log.namaKlien || "-"} <span style="font-weight: normal; color: var(--text-muted); font-size: 11px;">| ${log.alamatKlien || "-"}</span>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted); font-weight: 600; background: #fff; padding: 2px 6px; border-radius: 4px; border: 1px solid #eee;">
+                        <i class="fa-regular fa-clock"></i> ${log.jamBerangkat} <i class="fa-solid fa-arrow-right" style="font-size: 9px; margin: 0 2px;"></i> ${log.jamSampai}
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px;">
+                    <div style="color: var(--text-muted);"><i class="fa-solid fa-location-dot"></i> ${log.gps}</div>
+                    ${kendalaHtml}
+                </div>
+            `;
+        } else {
+            // UI NORMAL (Mengerjakan Tugas / Internal)
+            li.className = 'item-mengerjakan';
+            
+            let kHtml = hasKendala ? `<div style="color: var(--primary); font-size: 11px; font-weight: 600; margin-top: 6px;"><i class="fa-solid fa-triangle-exclamation"></i> Kendala: ${log.kendala}</div>` : '';
+            
+            li.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; width: 100%; margin-bottom: 6px; font-size: 11px; color: var(--text-muted); font-weight: 600; border-bottom: 1px dashed #eee; padding-bottom: 4px;">
+                    <div><i class="fa-regular fa-clock"></i> Mulai: <span style="color: var(--text-main);">${log.jamSampai}</span></div>
+                    <div style="text-align: right;">Selesai: <span style="color: var(--text-main);">${log.jamSelesai}</span></div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px; align-items: start; margin-bottom: 6px;">
+                    <div style="font-weight: 600; font-size: 13px; color: var(--text-main); line-height: 1.3;">
+                        <i class="fa-solid fa-wrench" style="color: var(--text-muted); font-size: 11px; margin-right: 4px;"></i>${log.namaKlien || "-"} 
+                        <span style="font-weight: normal; font-size: 11px; color: var(--text-muted);">| ${log.alamatKlien || "-"}</span>
+                    </div>
+                    <div style="font-size: 10px; color: var(--text-muted); text-align: right; line-height: 1.3;">
+                        <i class="fa-solid fa-location-dot"></i> ${log.gps}
+                    </div>
+                </div>
+                
+                <div style="font-size: 12px; color: var(--text-main); line-height: 1.4;">
+                    ${log.detail}
+                </div>
+                ${kHtml}
+            `;
+        }
+        
         list.appendChild(li);
     });
 }
@@ -3073,19 +3256,19 @@ async function jalankanSync() {
                         let antreanUpdate = JSON.parse(localStorage.getItem('antreanLog')) || [];
                         if (antreanUpdate.length > 0) {
                             const firstItem = antreanUpdate[0];
-                            // Verifikasi bahwa item[0] masih sama dengan yang baru saja diproses (belum di-shift tab lain)
-                            const isSameTaskId = (payload.action === 'delete_task' || payload.action === 'update_sampai' || payload.action === 'update_selesai') && 
-                                                 firstItem.taskId === payload.taskId && firstItem.action === payload.action;
-                            const isSameAction = payload.action === 'simpan_berangkat' && firstItem.action === 'simpan_berangkat';
                             
-                            if (isSameTaskId || isSameAction) {
+                            // Verifikasi dinamis: Cocokkan taskId dan action agar semua jenis payload (termasuk 'simpan') bisa lolos
+                            const isSameTaskId = firstItem.taskId === payload.taskId && firstItem.action === payload.action;
+                            const isSameActionOnly = !payload.taskId && firstItem.action === payload.action;
+                            
+                            if (isSameTaskId || isSameActionOnly) {
                                 antreanUpdate.shift();
                                 safeSaveToStorage('antreanLog', JSON.stringify(antreanUpdate));
                                 itemsProcessed++;
                                 console.log('[jalankanSync] ✓ Item shifted. Remaining: ' + antreanUpdate.length);
                             } else {
                                 console.warn('[jalankanSync] ⚠️ Item already shifted by another tab, skipping shift(). Current first item: taskId=' + firstItem.taskId + ', action=' + firstItem.action);
-                                break; // Stop processing, queue might have been modified by another tab
+                                break; // Stop processing
                             }
                         }
                     } else {
