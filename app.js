@@ -2,8 +2,8 @@
 // KONFIGURASI UTAMA
 // DEBUG: Buka DevTools dengan F12 atau Ctrl+Shift+I untuk melihat console logs!
 // ==============================================
-// FIX: TAMBAH VERSI APLIKASI
-const APP_VERSION = "v1.0.1";
+// FIX: AUTO VERSI DAN HEADER NAMA
+let APP_VERSION = "v.Memuat..."; // Akan diupdate otomatis dari cache
 
 console.log('%c🚀 app.js LOADED!', 'font-size: 16px; color: green; font-weight: bold;');
 console.log('📍 Timestamp:', new Date().toISOString());
@@ -221,12 +221,42 @@ async function fetchKalenderLibur() {
     }
 }
 
+// ==============================================
+// FIX: AUTO VERSI DAN HEADER NAMA - FUNGSI MEMBACA VERSI DARI SERVICE WORKER CACHE
+// ==============================================
+async function tampilkanVersiOtomatis() {
+    if ('caches' in window) {
+        try {
+            const cacheNames = await caches.keys();
+            // Cari nama cache yang diawali dengan 'artemis-log-'
+            const cacheAktif = cacheNames.find(name => name.startsWith('artemis-log-'));
+
+            if (cacheAktif) {
+                // Ambil versi dengan membuang prefix 'artemis-log-'
+                APP_VERSION = cacheAktif.replace('artemis-log-', '');
+            } else {
+                APP_VERSION = "v.Dev/Baru";
+            }
+        } catch (err) {
+            console.log('[tampilkanVersiOtomatis] Gagal membaca cache versi:', err);
+            APP_VERSION = "v.Error";
+        }
+    }
+
+    // Tampilkan dengan aman TANPA menimpa nama teknisi
+    const versiElemen = document.getElementById('teksVersiApp');
+    if (versiElemen) {
+        versiElemen.innerText = "Versi " + APP_VERSION;
+    }
+    console.log('[tampilkanVersiOtomatis] ✓ APP_VERSION updated to:', APP_VERSION);
+}
+
 window.onload = function() {
     console.log('%c📄 window.onload TRIGGERED', 'font-size: 14px; color: blue; font-weight: bold;');
     console.log('🕐 Onload time:', new Date().toISOString());
     
-    // FIX: TAMBAH VERSI APLIKASI
-    document.getElementById('teksVersiApp').innerText = "Versi " + APP_VERSION;
+    // FIX: AUTO VERSI DAN HEADER NAMA - Panggil untuk membaca versi dari cache
+    tampilkanVersiOtomatis();
 
     // Set default tanggal hari ini
     const tanggalHariIni = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -243,7 +273,7 @@ window.onload = function() {
     const savedTipe = localStorage.getItem('logSettingTipe') || 'Kunjungan'; 
     if (savedName) document.getElementById('nama').value = savedName;
     document.getElementById(savedTipe === 'Kunjungan' ? 'modeLapangan' : 'modeCS').checked = true;
-    updateHeaderTeknisiName(); // Update header with technician name
+    updateHeaderTeknisiName(); // FIX: AUTO VERSI DAN HEADER NAMA - Pastikan nama teknisi tampil di header
     
     // Auto-sync on app load if technician name exists
     if (savedName) {
