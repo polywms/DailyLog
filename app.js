@@ -2,6 +2,9 @@
 // KONFIGURASI UTAMA
 // DEBUG: Buka DevTools dengan F12 atau Ctrl+Shift+I untuk melihat console logs!
 // ==============================================
+// FIX: TAMBAH VERSI APLIKASI
+const APP_VERSION = "v1.0.1";
+
 console.log('%c🚀 app.js LOADED!', 'font-size: 16px; color: green; font-weight: bold;');
 console.log('📍 Timestamp:', new Date().toISOString());
 console.log('%c💡 TIP: Buka Console tab di DevTools (F12) untuk melihat debug logs', 'color: orange; font-style: italic;');
@@ -221,6 +224,9 @@ async function fetchKalenderLibur() {
 window.onload = function() {
     console.log('%c📄 window.onload TRIGGERED', 'font-size: 14px; color: blue; font-weight: bold;');
     console.log('🕐 Onload time:', new Date().toISOString());
+    
+    // FIX: TAMBAH VERSI APLIKASI
+    document.getElementById('teksVersiApp').innerText = "Versi " + APP_VERSION;
 
     // Set default tanggal hari ini
     const tanggalHariIni = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -2401,7 +2407,8 @@ function selesaiIstirahat() {
         namaKlien: "ISTIRAHAT", 
         alamatKlien: "Istirahat / Break", 
         detail: "Istirahat Siang", 
-        kendala: "" 
+        kendala: "",
+        app_version: APP_VERSION // FIX: TAMBAH VERSI APLIKASI
     };
     
     // Cari GPS dan simpan
@@ -2655,7 +2662,7 @@ function klikTombolMulaiPengerjaan() {
 }
 
 function kirimDataParsial(aksi) {
-    const payload = { action: aksi, taskId: aktifTaskId, nama: localStorage.getItem('logSettingNama'), tanggal: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }), tipe: 'Kunjungan', namaKlien: aktifNamaKlien, alamatKlien: aktifAlamatKlien };
+    const payload = { action: aksi, taskId: aktifTaskId, nama: localStorage.getItem('logSettingNama'), tanggal: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }), tipe: 'Kunjungan', namaKlien: aktifNamaKlien, alamatKlien: aktifAlamatKlien, app_version: APP_VERSION }; // FIX: TAMBAH VERSI APLIKASI
     if (aksi === 'simpan_berangkat') payload.jamBerangkat = aktifWaktuBerangkat;
     if (aksi === 'update_sampai') payload.jamSampai = aktifWaktuSampai;
     let antrean = JSON.parse(localStorage.getItem('antreanLog')) || []; antrean.push(payload); safeSaveToStorage('antreanLog', JSON.stringify(antrean));
@@ -2781,7 +2788,8 @@ function simpanDataFinalKunjungan() {
         detail: document.getElementById('detailKunjungan').value, 
         kendala: kendalaGabung,
         nama: localStorage.getItem('logSettingNama'),
-        tanggal: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        tanggal: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        app_version: APP_VERSION // FIX: TAMBAH VERSI APLIKASI
     };
     
     // AUDIT FIX 3.1: Reset state SEBELUM request GPS (data sudah aman di queue)
@@ -2828,7 +2836,8 @@ function simpanDataInternal() {
         detail: detail, 
         kendala: document.getElementById('kendalaInternal').value,
         nama: localStorage.getItem('logSettingNama'),
-        tanggal: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        tanggal: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        app_version: APP_VERSION // FIX: TAMBAH VERSI APLIKASI
     };
     
     // AUDIT FIX 3.1: Reset form SEBELUM request GPS (data sudah aman di queue)
