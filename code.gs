@@ -342,15 +342,47 @@ function pindahkanLogKeHistory() {
       let rangeData = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn());
       let values = rangeData.getValues();
       
-      // Append data dengan batch untuk efisiensi
-      values.forEach(row => {
+      // BUG FIX 4: Filter data sebelum dipindahkan - hanya pindahkan baris dengan Jam Selesai valid
+      // Kolom Jam Selesai adalah indeks ke-3 (kolom D, 0-indexed)
+      let rowsToMove = [];
+      let rowsIncomplete = [];
+      
+      values.forEach((row, idx) => {
+        const jamSelesai = row[3]; // Indeks ke-3 = kolom D
+        // Hanya pindahkan jika Jam Selesai bukan "-", tidak kosong, dan valid
+        if (jamSelesai && jamSelesai !== "-" && jamSelesai.toString().trim() !== "") {
+          rowsToMove.push(row);
+          Logger.log("✓ Row " + (idx + 2) + " akan dipindahkan (Jam Selesai: " + jamSelesai + ")");
+        } else {
+          rowsIncomplete.push(row);
+          Logger.log("⊘ Row " + (idx + 2) + " SKIP (Jam Selesai kosong/belum selesai)");
+        }
+      });
+      
+      // Append hanya baris yang selesai
+      rowsToMove.forEach(row => {
         historySheet.appendRow(row);
       });
-      Logger.log("✓ Moved " + values.length + " rows to history for sheet: " + sheetName);
+      Logger.log("✓ Moved " + rowsToMove.length + " completed rows to history for sheet: " + sheetName);
       
-      // AUDIT FIX 4.2: BARU KEMUDIAN hapus data dari sheet utama (setelah append berhasil)
-      sheet.deleteRows(2, lastRow - 1);
-      Logger.log("✓ Deleted " + (lastRow - 1) + " rows from main sheet: " + sheetName);
+      // Hapus baris yang sudah dipindahkan (dari akhir agar index tidak berubah)
+      if (rowsToMove.length > 0) {
+        let rowIndicesToDelete = [];
+        let movedCount = 0;
+        values.forEach((row, idx) => {
+          const jamSelesai = row[3];
+          if (jamSelesai && jamSelesai !== "-" && jamSelesai.toString().trim() !== "") {
+            rowIndicesToDelete.push(idx + 2); // Adjust untuk row index (row 1 = header)
+            movedCount++;
+          }
+        });
+        
+        // Delete dari belakang agar index tetap valid
+        for (let i = rowIndicesToDelete.length - 1; i >= 0; i--) {
+          sheet.deleteRow(rowIndicesToDelete[i]);
+        }
+        Logger.log("✓ Deleted " + movedCount + " rows from main sheet: " + sheetName);
+      }
     });
     
     Logger.log("✅ pindahkanLogKeHistory() COMPLETED SUCCESSFULLY");

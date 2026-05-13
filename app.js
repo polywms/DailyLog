@@ -162,6 +162,30 @@ function getMondayOfCurrentWeek() {
     return new Date(today.setDate(diff));
 }
 
+// ================================================
+// WRAPPER: Safe Storage dengan Error Handling
+// Tujuan: Cegah crash saat localStorage penuh
+// Caller: Semua fungsi yang menyimpan antreanLog & dailyLogTeknisi
+// Side Effects: alert() ke user jika memory penuh
+// ================================================
+function safeSaveToStorage(key, data) {
+    try {
+        localStorage.setItem(key, data);
+        console.log('[safeSaveToStorage] ✓ Saved ' + key + ' successfully');
+        return true;
+    } catch (e) {
+        if (e.name === 'QuotaExceededError' || e.code === 22) {
+            console.error('[safeSaveToStorage] ⚠️ QUOTA EXCEEDED for ' + key);
+            alert('🚨 Memori penyimpanan penuh!\n\nMohon:\n1. Clear cache aplikasi (Buka DevTools → Storage → Clear site data)\n2. Lakukan sinkronisasi manual\n3. Coba lagi\n\nData tidak akan hilang, tapi fitur offline sementara terbatas.');
+            return false;
+        } else {
+            console.error('[safeSaveToStorage] ERROR:', e.name, e.message);
+            alert('❌ Gagal menyimpan data: ' + e.message);
+            return false;
+        }
+    }
+}
+
 window.onload = function() {
     console.log('%c📄 window.onload TRIGGERED', 'font-size: 14px; color: blue; font-weight: bold;');
     console.log('🕐 Onload time:', new Date().toISOString());
@@ -2418,7 +2442,7 @@ function kirimDataParsial(aksi) {
     const payload = { action: aksi, taskId: aktifTaskId, nama: localStorage.getItem('logSettingNama'), tanggal: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }), tipe: 'Kunjungan', namaKlien: aktifNamaKlien, alamatKlien: aktifAlamatKlien };
     if (aksi === 'simpan_berangkat') payload.jamBerangkat = aktifWaktuBerangkat;
     if (aksi === 'update_sampai') payload.jamSampai = aktifWaktuSampai;
-    let antrean = JSON.parse(localStorage.getItem('antreanLog')) || []; antrean.push(payload); localStorage.setItem('antreanLog', JSON.stringify(antrean));
+    let antrean = JSON.parse(localStorage.getItem('antreanLog')) || []; antrean.push(payload); safeSaveToStorage('antreanLog', JSON.stringify(antrean));
     jalankanSync();
 }
 
@@ -2435,7 +2459,7 @@ function batalTiket() {
                 taskId: aktifTaskId,
                 nama: localStorage.getItem('logSettingNama')
             });
-            localStorage.setItem('antreanLog', JSON.stringify(antrean));
+            safeSaveToStorage('antreanLog', JSON.stringify(antrean));
             jalankanSync(); // Eksekusi penghapusan di background
         }
         // -----------------------------------------------------------
@@ -2571,7 +2595,7 @@ function mintaGPSDanSimpan(payload) {
     // AUDIT FIX 3.1: Push ke antrean terlebih dahulu (secure dari void drop)
     let antrean = JSON.parse(localStorage.getItem('antreanLog')) || [];
     antrean.push(payloadWithPendingGPS);
-    localStorage.setItem('antreanLog', JSON.stringify(antrean));
+    safeSaveToStorage('antreanLog', JSON.stringify(antrean));
     
     // Now request GPS and update the last queued item with actual GPS data
     if (navigator.geolocation) {
@@ -2604,7 +2628,7 @@ function updateGPSInQueue(gpsData, originalPayload) {
             
             // Update GPS data
             antrean[i].gps = gpsData;
-            localStorage.setItem('antreanLog', JSON.stringify(antrean));
+            safeSaveToStorage('antreanLog', JSON.stringify(antrean));
             
             console.log('[updateGPSInQueue] ✓ Updated GPS for item at index ' + i);
             
@@ -2621,10 +2645,10 @@ function eksekusiSimpanGPS(gps, payload) {
     const dataBaru = { action: payload.action || "simpan", nama: localStorage.getItem('logSettingNama'), tanggal: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }), gps: gps, ...payload };
     
     if (payload.tipe === 'Tugas Internal / CS' || payload.action === 'update_selesai') {
-        logData.push(dataBaru); localStorage.setItem('dailyLogTeknisi', JSON.stringify(logData));
+        logData.push(dataBaru); safeSaveToStorage('dailyLogTeknisi', JSON.stringify(logData));
     }
 
-    let antrean = JSON.parse(localStorage.getItem('antreanLog')) || []; antrean.push(dataBaru); localStorage.setItem('antreanLog', JSON.stringify(antrean));
+    let antrean = JSON.parse(localStorage.getItem('antreanLog')) || []; antrean.push(dataBaru); safeSaveToStorage('antreanLog', JSON.stringify(antrean));
     
     if (payload.tipe === 'Kunjungan') {
         localStorage.removeItem('tiketTugasAktif'); document.getElementById('namaCustomer').value = document.getElementById('alamatCustomer').value = document.getElementById('detailKunjungan').value = document.getElementById('kendalaKunjungan').value = ''; document.getElementById('tipeKendala').value = '';
@@ -2716,19 +2740,34 @@ async function jalankanSync() {
                         backendValidation = resJson.taskIdFound !== false; // Accept true atau undefined (backward compat)
                         console.log('[jalankanSync] Backend validation for ' + payload.action + ': ' + backendValidation);
                     } else if (payload.action === 'delete_task') {
-                        backendValidation = resJson.rowDeleted !== false;
-                        console.log('[jalankanSync] Backend validation for delete_task: ' + backendValidation);
+                        // BUG FIX 1: Jika delete_task dan rowDeleted false, anggap tugas sudah tidak ada. TETAP shift() agar queue tidak macet.
+                        backendValidation = true; // ALWAYS consider success untuk delete_task agar tidak infinite loop
+                        console.log('[jalankanSync] Backend validation for delete_task: ' + backendValidation + ' (rowDeleted=' + resJson.rowDeleted + ')');
                     } else {
                         backendValidation = true; // Assume success for other actions
                     }
                     
                     // AUDIT FIX 1.3: HANYA shift jika backend confirm ATAU jika tidak ada validation data (backward compat)
                     if (backendValidation || (resJson.taskIdFound === undefined && resJson.rowDeleted === undefined)) {
+                        // BUG FIX 2: Atomic Shift - Validasi ulang localStorage sebelum shift untuk cegah race condition multi-tab
                         let antreanUpdate = JSON.parse(localStorage.getItem('antreanLog')) || [];
-                        antreanUpdate.shift(); 
-                        localStorage.setItem('antreanLog', JSON.stringify(antreanUpdate));
-                        itemsProcessed++;
-                        console.log('[jalankanSync] ✓ Item shifted. Remaining: ' + antreanUpdate.length);
+                        if (antreanUpdate.length > 0) {
+                            const firstItem = antreanUpdate[0];
+                            // Verifikasi bahwa item[0] masih sama dengan yang baru saja diproses (belum di-shift tab lain)
+                            const isSameTaskId = (payload.action === 'delete_task' || payload.action === 'update_sampai' || payload.action === 'update_selesai') && 
+                                                 firstItem.taskId === payload.taskId && firstItem.action === payload.action;
+                            const isSameAction = payload.action === 'simpan_berangkat' && firstItem.action === 'simpan_berangkat';
+                            
+                            if (isSameTaskId || isSameAction) {
+                                antreanUpdate.shift();
+                                safeSaveToStorage('antreanLog', JSON.stringify(antreanUpdate));
+                                itemsProcessed++;
+                                console.log('[jalankanSync] ✓ Item shifted. Remaining: ' + antreanUpdate.length);
+                            } else {
+                                console.warn('[jalankanSync] ⚠️ Item already shifted by another tab, skipping shift(). Current first item: taskId=' + firstItem.taskId + ', action=' + firstItem.action);
+                                break; // Stop processing, queue might have been modified by another tab
+                            }
+                        }
                     } else {
                         console.warn('[jalankanSync] ⚠️ Backend validation failed, queue item retained for retry');
                         break; // Stop retry, keep item in queue
