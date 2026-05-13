@@ -192,7 +192,46 @@
                             <div><label>Area / Alamat</label><input type="text" id="alamatCustomer" placeholder="Misal: Bandongan"></div>
                         </div>
                     </div>
+                    <!-- FIX: TAHAP 2 - Activity Tracker dengan 3 tombol status -->
+                    <div id="panelAktivitas" style="display: none; margin: 20px 0;">
+                        <label>Status Aktivitas</label>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <button id="btnPersiapan" class="btn-outline" onclick="klikTombolPersiapan()" style="padding: 12px; border-radius: 8px; background: #e9ecef; color: #495057; font-weight: 600; transition: all 0.3s;">
+                                <i class="fa-solid fa-bed"></i> Persiapan / Standby
+                            </button>
+                            <button id="btnMulaiPerjalanan" class="btn-outline" onclick="klikTombolMulaiPerjalanan()" style="padding: 12px; border-radius: 8px; background: #e7f3ff; color: #0066cc; font-weight: 600; transition: all 0.3s;">
+                                <i class="fa-solid fa-motorcycle"></i> 🚗 Mulai Perjalanan
+                            </button>
+                            <button id="btnMulaiPengerjaan" class="btn-outline" onclick="klikTombolMulaiPengerjaan()" style="padding: 12px; border-radius: 8px; background: #fff3cd; color: #856404; font-weight: 600; transition: all 0.3s; display: none;">
+                                <i class="fa-solid fa-wrench"></i> 🔧 Mulai Pengerjaan (Tiba)
+                            </button>
+                        </div>
+                    </div>
                     <div id="formDetailArea" style="display: none;">
+                        <!-- FIX: TAHAP 2 - Tambah 3 input time untuk edit waktu manual -->
+                        <div class="grid-2">
+                            <div>
+                                <label>Jam Berangkat</label>
+                                <div class="time-wrapper">
+                                    <input type="time" id="jamBerangkatEdit">
+                                    <button class="btn-time" onclick="setWaktuSekarang('jamBerangkatEdit')"><i class="fa-solid fa-clock"></i>Now</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label>Jam Tiba/Mulai</label>
+                                <div class="time-wrapper">
+                                    <input type="time" id="jamSampaiEdit">
+                                    <button class="btn-time" onclick="setWaktuSekarang('jamSampaiEdit')"><i class="fa-solid fa-clock"></i>Now</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label>Jam Selesai</label>
+                                <div class="time-wrapper">
+                                    <input type="time" id="jamSelesaiEdit">
+                                    <button class="btn-time" onclick="setWaktuSekarang('jamSelesaiEdit')"><i class="fa-solid fa-clock"></i>Now</button>
+                                </div>
+                            </div>
+                        </div>
                         <label>Detail Pekerjaan [Wajib isi]</label>
                         <textarea id="detailKunjungan" placeholder="Jelaskan apa saja yang dikerjakan... Tulis 'Lancar' kalau tidak ada masalah"></textarea>
                         <label>Kendala [Kosongkan jika lancar]</label>
@@ -204,11 +243,8 @@
                             </select>
                             <input type="text" id="kendalaKunjungan" placeholder="Detail / Penyebab">
                         </div>
-                    </div>
-                    <div class="slider-container state-berangkat" id="actionSlider">
-                        <div class="slider-text" id="sliderText">Geser Mulai Perjalanan &gt;&gt;</div>
-                        <div class="slider-bg" id="sliderBg"></div>
-                        <div class="slider-thumb" id="sliderThumb"><i class="fa-solid fa-motorcycle"></i></div>
+                        <!-- FIX: TAHAP 2 - Tombol SELESAI & SIMPAN -->
+                        <button class="btn-primary" onclick="simpanDataFinalKunjungan()" style="margin-top: 15px;"><i class="fa-solid fa-check-double"></i> ✅ SELESAI & SIMPAN</button>
                     </div>
                 </div>
                 
@@ -249,6 +285,45 @@
             </div>
             
             <div id="tab-dashboard" class="content">
+                <!-- FIX: TAHAP 3 - Panel Target Bulanan di paling atas -->
+                <div id="panelTargetBulanan" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 20px; margin-bottom: 20px; color: white;">
+                    <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 16px; font-weight: 700;">📊 Target Bulanan (Siklus Tgl 1 - 1)</h3>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <!-- Target Kunjungan (Outdoor) -->
+                        <div style="background: rgba(255,255,255,0.15); border-radius: 8px; padding: 12px;">
+                            <div style="font-size: 12px; font-weight: 600; opacity: 0.9; margin-bottom: 8px;">🚗 Kunjungan (Target 5/hari)</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px;">
+                                <div>
+                                    <div style="font-size: 11px; opacity: 0.8;">Selesai</div>
+                                    <div style="font-size: 18px; font-weight: 700;" id="targetOutdoorSelesai">0</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 11px; opacity: 0.8;">Target</div>
+                                    <div style="font-size: 18px; font-weight: 700;" id="targetOutdoorBerjalan">0</div>
+                                </div>
+                            </div>
+                            <div style="font-size: 12px; font-weight: 600; padding: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; text-align: center;" id="targetOutdoorStatus">Target Berjalan</div>
+                        </div>
+                        
+                        <!-- Target Internal (Indoor) -->
+                        <div style="background: rgba(255,255,255,0.15); border-radius: 8px; padding: 12px;">
+                            <div style="font-size: 12px; font-weight: 600; opacity: 0.9; margin-bottom: 8px;">🔧 Internal / CS (Target 3/hari)</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px;">
+                                <div>
+                                    <div style="font-size: 11px; opacity: 0.8;">Selesai</div>
+                                    <div style="font-size: 18px; font-weight: 700;" id="targetIndoorSelesai">0</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 11px; opacity: 0.8;">Target</div>
+                                    <div style="font-size: 18px; font-weight: 700;" id="targetIndoorBerjalan">0</div>
+                                </div>
+                            </div>
+                            <div style="font-size: 12px; font-weight: 600; padding: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; text-align: center;" id="targetIndoorStatus">Target Berjalan</div>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Inner Tabs: Hari / Minggu -->
                 <div class="dashboard-inner-tabs" style="display: flex; gap: 10px;">
                     <button class="dashboard-tab-btn active" onclick="switchDashboardTab('hari')" id="tab-hari-btn" style="flex: 1;">

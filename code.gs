@@ -67,6 +67,55 @@ function doPost(e) {
     }
 
     // ==========================================
+    // FIX: TAHAP 1 - API KALENDER LIBUR
+    // ==========================================
+    if (action === "get_kalender_libur") {
+      let sheetName = "Kalender_Libur";
+      let kalenderSheet = ss.getSheetByName(sheetName);
+      
+      // FIX: TAHAP 1 - Jika sheet belum ada, buat otomatis dengan header default
+      if (!kalenderSheet) {
+        kalenderSheet = ss.insertSheet(sheetName);
+        kalenderSheet.appendRow(["Tanggal", "Keterangan"]);
+        Logger.log("✓ [get_kalender_libur] Sheet 'Kalender_Libur' dibuat otomatis dengan header");
+        return ContentService.createTextOutput(JSON.stringify({ "status": "success", "data": [] })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      // FIX: TAHAP 1 - Baca data dari sheet (baris 2 hingga terakhir)
+      let lastRow = kalenderSheet.getLastRow();
+      let liburData = [];
+      
+      if (lastRow > 1) {
+        let rangeData = kalenderSheet.getRange(2, 1, lastRow - 1, 2).getValues();
+        rangeData.forEach(row => {
+          let tanggalRaw = row[0];
+          let keterangan = row[1];
+          
+          // FIX: TAHAP 1 - Format tanggal ke DD/MM/YYYY untuk kompatibilitas app.js
+          let tanggalFormatted = "";
+          if (tanggalRaw instanceof Date) {
+            let day = String(tanggalRaw.getDate()).padStart(2, '0');
+            let month = String(tanggalRaw.getMonth() + 1).padStart(2, '0');
+            let year = tanggalRaw.getFullYear();
+            tanggalFormatted = day + "/" + month + "/" + year;
+          } else {
+            // Fallback jika input bukan Date object
+            tanggalFormatted = tanggalRaw.toString();
+          }
+          
+          liburData.push({
+            tanggal: tanggalFormatted,
+            keterangan: keterangan
+          });
+          Logger.log("✓ [get_kalender_libur] Data libur: " + tanggalFormatted + " - " + keterangan);
+        });
+      }
+      
+      // FIX: TAHAP 1 - Kembalikan respons JSON dengan format standard
+      return ContentService.createTextOutput(JSON.stringify({ "status": "success", "data": liburData })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ==========================================
     // 4. HITUNG STATISTIK DASHBOARD (MENGABAIKAN ISTIRAHAT)
     // ==========================================
     if (action === "get_dashboard_stats") {

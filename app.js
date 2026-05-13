@@ -186,6 +186,38 @@ function safeSaveToStorage(key, data) {
     }
 }
 
+// ==============================================
+// FIX: TAHAP 3 - FETCH KALENDER LIBUR
+// ==============================================
+async function fetchKalenderLibur() {
+    try {
+        console.log('[fetchKalenderLibur] Fetching calendar data from server...');
+        const response = await fetch(scriptURL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'get_kalender_libur' }),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            timeout: 10000
+        });
+        
+        if (!response.ok) {
+            console.error('[fetchKalenderLibur] HTTP error:', response.status);
+            return;
+        }
+        
+        const resJson = await response.json();
+        if (resJson.status === 'success' && resJson.data) {
+            // FIX: TAHAP 3 - Extract hanya tanggal (format DD/MM/YYYY) ke array untuk perbandingan mudah
+            const tanggalLibur = resJson.data.map(item => item.tanggal);
+            localStorage.setItem('kalenderLibur', JSON.stringify(tanggalLibur));
+            console.log('[fetchKalenderLibur] ✓ Saved ' + tanggalLibur.length + ' holiday dates to localStorage');
+        } else {
+            console.warn('[fetchKalenderLibur] ⚠️ Invalid response format');
+        }
+    } catch (err) {
+        console.error('[fetchKalenderLibur] Fetch error:', err.message);
+    }
+}
+
 window.onload = function() {
     console.log('%c📄 window.onload TRIGGERED', 'font-size: 14px; color: blue; font-weight: bold;');
     console.log('🕐 Onload time:', new Date().toISOString());
@@ -231,7 +263,164 @@ window.onload = function() {
     pulihkanStatusIstirahat();
     jalankanSync();
     
+    // FIX: TAHAP 3 - Fetch kalender libur saat app load
+    fetchKalenderLibur();
+    
     setInterval(() => { jalankanSync(); }, 10000);
+}
+
+// ==============================================
+// FIX: TAHAP 3 - HITUNG TARGET BULANAN & HUTANG
+// ==============================================
+function hitungTargetBulanan() {
+    try {
+        console.log('[hitungTargetBulanan] START - Calculating monthly cycle targets');
+        
+        // FIX: TAHAP 3 - Get today's date
+        const today = new Date();
+        const todayDay = today.getDate();
+        const todayMonth = today.getMonth();
+        const todayYear = today.getFullYear();
+        
+        // FIX: TAHAP 3 - Determine cycle dates (tanggal 1 - tanggal 1)
+        let cycleStartDate, cycleEndDate;
+        
+        // Start: tanggal 1 bulan ini
+        cycleStartDate = new Date(todayYear, todayMonth, 1);
+        
+        // End: tanggal 1 bulan depan
+        let nextMonthDate1 = new Date(todayYear, todayMonth + 1, 1);
+        
+        // FIX: TAHAP 3 - Check if tanggal 1 next month is Sunday or holiday
+        const kalenderLiburRaw = localStorage.getItem('kalenderLibur');
+        const kalenderLibur = kalenderLiburRaw ? JSON.parse(kalenderLiburRaw) : [];
+        
+        const date1NextMonthFormatted = String(nextMonthDate1.getDate()).padStart(2, '0') + '/' + 
+                                        String(nextMonthDate1.getMonth() + 1).padStart(2, '0') + '/' + 
+                                        nextMonthDate1.getFullYear();
+        
+        const isDate1Sunday = nextMonthDate1.getDay() === 0;
+        const isDate1Holiday = kalenderLibur.includes(date1NextMonthFormatted);
+        
+        if (isDate1Sunday || isDate1Holiday) {
+            // Shift cycle end to tanggal 2 next month
+            cycleEndDate = new Date(todayYear, todayMonth + 1, 2);
+            console.log('[hitungTargetBulanan] Tanggal 1 is ' + (isDate1Sunday ? 'Sunday' : 'Holiday') + ', shifted to tanggal 2');
+        } else {
+            cycleEndDate = nextMonthDate1;
+        }
+        
+        // FIX: TAHAP 3 - Determine if today is within this cycle or belongs to previous cycle
+        // Jika hari ini tanggal 1 dan tanggal 1 itu libur, masuk ke siklus bulan lalu
+        const todayFormatted = String(todayDay).padStart(2, '0') + '/' + 
+                               String(todayMonth + 1).padStart(2, '0') + '/' + 
+                               todayYear;
+        
+        let effectiveCycleStart = cycleStartDate;
+        if (todayDay === 1 && (isDate1Sunday || isDate1Holiday)) {
+            // Today is tanggal 1 and it's a holiday/sunday, so today belongs to previous cycle
+            effectiveCycleStart = new Date(todayYear, todayMonth - 1, 1);
+            console.log('[hitungTargetBulanan] Today is tanggal 1 (holiday/sunday), adjusting cycle start to last month');
+        }
+        
+        // FIX: TAHAP 3 - Count working days from cycle start to today
+        let hariKerjaBerjalan = 0;
+        for (let d = new Date(effectiveCycleStart); d <= today; d.setDate(d.getDate() + 1)) {
+            const dayOfWeek = d.getDay();
+            const dateFormatted = String(d.getDate()).padStart(2, '0') + '/' + 
+                                  String(d.getMonth() + 1).padStart(2, '0') + '/' + 
+                                  d.getFullYear();
+            
+            // Count only if NOT Sunday AND NOT in holiday list
+            if (dayOfWeek !== 0 && !kalenderLibur.includes(dateFormatted)) {
+                hariKerjaBerjalan++;
+            }
+        }
+        
+        // FIX: TAHAP 3 - Calculate targets
+        const targetOutdoorSeharusnya = hariKerjaBerjalan * 5;
+        const targetIndoorSeharusnya = hariKerjaBerjalan * 3;
+        
+        console.log('[hitungTargetBulanan] Working days elapsed: ' + hariKerjaBerjalan + 
+                    ' | Target Outdoor: ' + targetOutdoorSeharusnya + 
+                    ' | Target Indoor: ' + targetIndoorSeharusnya);
+        
+        // FIX: TAHAP 3 - Get completed tasks within cycle period
+        const dailyLogRaw = localStorage.getItem('dailyLogTeknisi');
+        const dailyLogData = JSON.parse(dailyLogRaw) || [];
+        
+        const weeklyHistoryRaw = localStorage.getItem('dashboardHistoriSepekan');
+        const weeklyHistoryData = JSON.parse(weeklyHistoryRaw) || [];
+        
+        // Combine and deduplicate by taskId
+        let allData = [...weeklyHistoryData, ...dailyLogData];
+        const uniqueTaskIds = new Set();
+        allData = allData.filter(item => {
+            if (item.taskId && uniqueTaskIds.has(item.taskId)) {
+                return false; // Duplicate, skip
+            }
+            if (item.taskId) uniqueTaskIds.add(item.taskId);
+            return true;
+        });
+        
+        console.log('[hitungTargetBulanan] Total combined data (after dedup): ' + allData.length);
+        
+        // FIX: TAHAP 3 - Filter for completed tasks within cycle period with valid endtime
+        const completedTasks = allData.filter(item => {
+            // Check if tanggal is within cycle
+            if (!item.tanggal) return false;
+            
+            const [d, m, y] = item.tanggal.split('/');
+            const itemDate = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+            
+            // FIX: TAHAP 3 - Only count if: has valid jamSelesai AND tanggal in range
+            const hasValidJamSelesai = item.jamSelesai && item.jamSelesai !== '-' && item.jamSelesai.trim() !== '';
+            const isInRange = itemDate >= effectiveCycleStart && itemDate <= today;
+            
+            return hasValidJamSelesai && isInRange;
+        });
+        
+        // FIX: TAHAP 3 - Count by type
+        const outdoorCount = completedTasks.filter(item => item.tipe === 'Kunjungan').length;
+        const indoorCount = completedTasks.filter(item => item.tipe === 'Tugas Internal / CS').length;
+        
+        console.log('[hitungTargetBulanan] Outdoor completed: ' + outdoorCount + ' | Indoor completed: ' + indoorCount);
+        
+        // FIX: TAHAP 3 - Calculate hutang (debt)
+        const hutangOutdoor = targetOutdoorSeharusnya - outdoorCount;
+        const hutangIndoor = targetIndoorSeharusnya - indoorCount;
+        
+        // FIX: TAHAP 3 - Update UI
+        document.getElementById('targetOutdoorSelesai').innerText = outdoorCount;
+        document.getElementById('targetOutdoorBerjalan').innerText = targetOutdoorSeharusnya;
+        
+        document.getElementById('targetIndoorSelesai').innerText = indoorCount;
+        document.getElementById('targetIndoorBerjalan').innerText = targetIndoorSeharusnya;
+        
+        // FIX: TAHAP 3 - Update status text and color
+        const outdoorStatusEl = document.getElementById('targetOutdoorStatus');
+        const indoorStatusEl = document.getElementById('targetIndoorStatus');
+        
+        if (hutangOutdoor <= 0) {
+            outdoorStatusEl.innerText = '✅ Target Tercapai/Surplus';
+            outdoorStatusEl.style.background = 'rgba(34, 197, 94, 0.3)';
+        } else {
+            outdoorStatusEl.innerText = '🔴 Hutang: ' + hutangOutdoor + ' Tugas';
+            outdoorStatusEl.style.background = 'rgba(239, 68, 68, 0.3)';
+        }
+        
+        if (hutangIndoor <= 0) {
+            indoorStatusEl.innerText = '✅ Target Tercapai/Surplus';
+            indoorStatusEl.style.background = 'rgba(34, 197, 94, 0.3)';
+        } else {
+            indoorStatusEl.innerText = '🔴 Hutang: ' + hutangIndoor + ' Tugas';
+            indoorStatusEl.style.background = 'rgba(239, 68, 68, 0.3)';
+        }
+        
+        console.log('[hitungTargetBulanan] ✓ COMPLETED - Outdoor hutang: ' + hutangOutdoor + ', Indoor hutang: ' + hutangIndoor);
+    } catch (err) {
+        console.error('[hitungTargetBulanan] ERROR:', err.message);
+    }
 }
 
 // ==============================================
@@ -389,6 +578,10 @@ async function muatDashboardStats() {
     } else if (currentDashboardTab === 'minggu') {
         generateMonthPills();
     }
+    
+    // FIX: TAHAP 3 - Hitung target bulanan & hutang
+    hitungTargetBulanan();
+    
     console.log('✅ [muatDashboardStats] COMPLETED');
 }
 
@@ -2402,40 +2595,63 @@ function setWaktuSekarang(idInput) { document.getElementById(idInput).value = ge
 // ==============================================
 // LOGIKA SLIDER KUNJUNGAN & LIVE TRACKING
 // ==============================================
-const sliderContainer = document.getElementById('actionSlider'), sliderThumb = document.getElementById('sliderThumb'), sliderBg = document.getElementById('sliderBg'), sliderText = document.getElementById('sliderText');
-let isDragging = false, startX = 0, maxSlide = 0;
-sliderThumb.addEventListener('touchstart', startDrag, {passive: true}); sliderThumb.addEventListener('mousedown', startDrag);
-document.addEventListener('touchmove', doDrag, {passive: false}); document.addEventListener('mousemove', doDrag);
-document.addEventListener('touchend', endDrag); document.addEventListener('mouseup', endDrag);
+// FIX: TAHAP 2 - HAPUS: Semua variable dan event listeners untuk slider drag
+// const sliderContainer = document.getElementById('actionSlider'), sliderThumb = document.getElementById('sliderThumb'), sliderBg = document.getElementById('sliderBg'), sliderText = document.getElementById('sliderText');
+// let isDragging = false, startX = 0, maxSlide = 0;
+// sliderThumb.addEventListener('touchstart', startDrag, {passive: true}); sliderThumb.addEventListener('mousedown', startDrag);
+// document.addEventListener('touchmove', doDrag, {passive: false}); document.addEventListener('mousemove', doDrag);
+// document.addEventListener('touchend', endDrag); document.addEventListener('mouseup', endDrag);
 
-function startDrag(e) { if(sliderContainer.classList.contains('disabled')) return; isDragging = true; startX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX; maxSlide = sliderContainer.offsetWidth - sliderThumb.offsetWidth - 6; }
-function doDrag(e) { if (!isDragging) return; let currentX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX; let diffX = Math.max(0, Math.min(currentX - startX, maxSlide)); sliderThumb.style.left = diffX + 3 + 'px'; sliderBg.style.width = diffX + (sliderThumb.offsetWidth / 2) + 'px'; }
-function endDrag(e) { if (!isDragging) return; isDragging = false; (parseInt(sliderThumb.style.left) || 0) >= maxSlide * 0.95 ? eksekusiFase() : resetSliderVisual(); }
-function resetSliderVisual() { sliderThumb.style.transition = 'left 0.3s'; sliderBg.style.transition = 'width 0.3s, background-color 0.3s'; sliderThumb.style.left = '3px'; sliderBg.style.width = '0'; setTimeout(() => { sliderThumb.style.transition = 'none'; sliderBg.style.transition = 'none'; }, 300); }
+// FIX: TAHAP 2 - HAPUS: Fungsi startDrag, doDrag, endDrag, resetSliderVisual
+// function startDrag(e) { if(sliderContainer.classList.contains('disabled')) return; isDragging = true; startX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX; maxSlide = sliderContainer.offsetWidth - sliderThumb.offsetWidth - 6; }
+// function doDrag(e) { if (!isDragging) return; let currentX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX; let diffX = Math.max(0, Math.min(currentX - startX, maxSlide)); sliderThumb.style.left = diffX + 3 + 'px'; sliderBg.style.width = diffX + (sliderThumb.offsetWidth / 2) + 'px'; }
+// function endDrag(e) { if (!isDragging) return; isDragging = false; (parseInt(sliderThumb.style.left) || 0) >= maxSlide * 0.95 ? eksekusiFase() : resetSliderVisual(); }
+// function resetSliderVisual() { sliderThumb.style.transition = 'left 0.3s'; sliderBg.style.transition = 'width 0.3s, background-color 0.3s'; sliderThumb.style.left = '3px'; sliderBg.style.width = '0'; setTimeout(() => { sliderThumb.style.transition = 'none'; sliderBg.style.transition = 'none'; }, 300); }
 
-function eksekusiFase() {
-    if (currentState === 'BERANGKAT') {
-        aktifNamaKlien = document.getElementById('namaCustomer').value; aktifAlamatKlien = document.getElementById('alamatCustomer').value;
-        if (!aktifNamaKlien || !aktifAlamatKlien) { alert('Isi Nama Customer & Alamatnya!'); resetSliderVisual(); return; }
-        
-        aktifWaktuBerangkat = getWaktuSekarang(); 
-        aktifTaskId = "T" + Date.now(); 
-        currentState = 'SAMPAI'; 
-        simpanStateTiket(); 
-        kirimDataParsial('simpan_berangkat');
-        stopReminderLoop(); // Stop notification reminders when journey started
+// FIX: TAHAP 2 - HAPUS: Fungsi eksekusiFase() - diganti dengan handler button-based
+// function eksekusiFase() { ... }
 
-    } else if (currentState === 'SAMPAI') {
-        aktifWaktuSampai = getWaktuSekarang(); 
-        currentState = 'SELESAI'; 
-        simpanStateTiket(); 
-        kirimDataParsial('update_sampai');
+// FIX: TAHAP 2 - Activity Tracker Button Handlers
+function klikTombolPersiapan() {
+    console.log('[klikTombolPersiapan] Clicked');
+    // Persiapan / Standby - Reset ke state awal
+    currentState = 'BERANGKAT';
+    aktifTaskId = aktifWaktuBerangkat = aktifWaktuSampai = aktifNamaKlien = aktifAlamatKlien = '';
+    document.getElementById('namaCustomer').value = document.getElementById('alamatCustomer').value = '';
+    document.getElementById('detailKunjungan').value = document.getElementById('kendalaKunjungan').value = '';
+    document.getElementById('tipeKendala').value = '';
+    localStorage.removeItem('tiketTugasAktif');
+    renderUIBerdasarkanState();
+}
 
-    } else if (currentState === 'SELESAI') {
-        if(!document.getElementById('detailKunjungan').value) { alert('Isi detail pekerjaan!'); resetSliderVisual(); return; }
-        sliderContainer.classList.add('disabled'); sliderText.innerText = 'MENCARI GPS...'; 
-        simpanDataFinalKunjungan();
+function klikTombolMulaiPerjalanan() {
+    console.log('[klikTombolMulaiPerjalanan] Clicked');
+    // FIX: TAHAP 2 - Mulai Perjalanan: Ambil waktu sekarang, catat data, trigger GPS background
+    aktifNamaKlien = document.getElementById('namaCustomer').value;
+    aktifAlamatKlien = document.getElementById('alamatCustomer').value;
+    if (!aktifNamaKlien || !aktifAlamatKlien) { 
+        alert('⚠️ Isi Nama Customer & Alamatnya terlebih dahulu!'); 
+        return; 
     }
+    
+    aktifWaktuBerangkat = getWaktuSekarang();
+    aktifTaskId = "T" + Date.now();
+    currentState = 'SAMPAI';
+    simpanStateTiket();
+    kirimDataParsial('simpan_berangkat');
+    stopReminderLoop();
+    console.log('[klikTombolMulaiPerjalanan] State updated to SAMPAI, taskId=' + aktifTaskId);
+}
+
+function klikTombolMulaiPengerjaan() {
+    console.log('[klikTombolMulaiPengerjaan] Clicked');
+    // FIX: TAHAP 2 - Mulai Pengerjaan (Tiba): Ambil waktu sekarang, catat sebagai jamSampai, trigger GPS background
+    aktifWaktuSampai = getWaktuSekarang();
+    currentState = 'SELESAI';
+    simpanStateTiket();
+    kirimDataParsial('update_sampai');
+    tampilkanFormSelesai();
+    console.log('[klikTombolMulaiPengerjaan] State updated to SELESAI, jamSampai=' + aktifWaktuSampai);
 }
 
 function kirimDataParsial(aksi) {
@@ -2473,24 +2689,72 @@ function batalTiket() {
 }
 
 function renderUIBerdasarkanState() {
+    // FIX: TAHAP 2 - Update untuk Activity Tracker (no more slider)
     document.getElementById('formCustomerArea').style.display = currentState === 'BERANGKAT' ? 'block' : 'none';
+    document.getElementById('panelAktivitas').style.display = currentState === 'BERANGKAT' ? 'block' : 'none';
+    
+    // FIX: TAHAP 2 - Show/hide activity buttons based on state
+    if (currentState === 'BERANGKAT') {
+        document.getElementById('btnPersiapan').style.display = 'block';
+        document.getElementById('btnMulaiPerjalanan').style.display = 'block';
+        document.getElementById('btnMulaiPengerjaan').style.display = 'none';
+    }
+    
     if (currentState !== 'BERANGKAT') {
-        document.getElementById('tiketPerjalanan').style.display = 'block'; document.getElementById('tiketInfoArea').innerHTML = `Menuju: <strong>${aktifNamaKlien}</strong><br>Lokasi: ${aktifAlamatKlien}`; document.getElementById('tiketWaktuBerangkat').innerText = aktifWaktuBerangkat;
+        document.getElementById('tiketPerjalanan').style.display = 'block'; 
+        document.getElementById('tiketInfoArea').innerHTML = `Menuju: <strong>${aktifNamaKlien}</strong><br>Lokasi: ${aktifAlamatKlien}`; 
+        document.getElementById('tiketWaktuBerangkat').innerText = aktifWaktuBerangkat;
         const elS = document.getElementById('tiketWaktuSampai');
-        if(currentState === 'SELESAI') { elS.innerText = aktifWaktuSampai; elS.style.color = 'var(--primary)'; } else { elS.innerText = '--:--'; elS.style.color = '#adb5bd'; }
-    } else { document.getElementById('tiketPerjalanan').style.display = 'none'; }
+        if(currentState === 'SELESAI') { 
+            elS.innerText = aktifWaktuSampai; 
+            elS.style.color = 'var(--primary)'; 
+        } else { 
+            elS.innerText = '--:--'; 
+            elS.style.color = '#adb5bd'; 
+        }
+    } else { 
+        document.getElementById('tiketPerjalanan').style.display = 'none'; 
+    }
+    
     document.getElementById('formDetailArea').style.display = currentState === 'SELESAI' ? 'block' : 'none';
-    sliderContainer.className = `slider-container state-${currentState.toLowerCase()}`;
-    if (currentState === 'BERANGKAT') { sliderText.innerText = 'Geser Mulai Perjalanan >>'; sliderThumb.innerHTML = '<i class="fa-solid fa-motorcycle"></i>'; } 
-    else if (currentState === 'SAMPAI') { sliderText.innerText = 'Geser Sudah Sampai >>'; sliderThumb.innerHTML = '<i class="fa-solid fa-location-dot"></i>'; } 
-    else if (currentState === 'SELESAI') { sliderText.innerText = 'Geser Selesai & Simpan >>'; sliderThumb.innerHTML = '<i class="fa-solid fa-check-double"></i>'; }
-    resetSliderVisual();
+}
+
+// ==============================================
+// FIX: TAHAP 2 - FUNGSI TAMPILKAN FORM SELESAI
+// ==============================================
+function tampilkanFormSelesai() {
+    // FIX: TAHAP 2 - Pre-fill input waktu dengan nilai dari state
+    document.getElementById('jamBerangkatEdit').value = aktifWaktuBerangkat || '';
+    document.getElementById('jamSampaiEdit').value = aktifWaktuSampai || '';
+    document.getElementById('jamSelesaiEdit').value = getWaktuSekarang();
+    
+    // Clear form fields
+    document.getElementById('detailKunjungan').value = '';
+    document.getElementById('kendalaKunjungan').value = '';
+    document.getElementById('tipeKendala').value = '';
+    
+    console.log('[tampilkanFormSelesai] Pre-filled times: berangkat=' + aktifWaktuBerangkat + ', sampai=' + aktifWaktuSampai + ', selesai=' + getWaktuSekarang());
 }
 
 // ==============================================
 // FUNGSI PENGIRIMAN DATA FINAL
 // ==============================================
 function simpanDataFinalKunjungan() {
+    // FIX: TAHAP 2 - Ambil waktu dari input yang bisa diedit user, bukan dari variable otomatis
+    const jamBerangkatEdit = document.getElementById('jamBerangkatEdit').value;
+    const jamSampaiEdit = document.getElementById('jamSampaiEdit').value;
+    const jamSelesaiEdit = document.getElementById('jamSelesaiEdit').value;
+    
+    if (!document.getElementById('detailKunjungan').value.trim()) {
+        alert('⚠️ Isi Detail Pekerjaan terlebih dahulu!');
+        return;
+    }
+    
+    if (!jamBerangkatEdit || !jamSampaiEdit || !jamSelesaiEdit) {
+        alert('⚠️ Isi semua waktu (Berangkat, Tiba, Selesai)!');
+        return;
+    }
+    
     // Combine kendala: tipeKendala + kendalaKunjungan
     const tipeKendala = document.getElementById('tipeKendala').value;
     const detailKendala = document.getElementById('kendalaKunjungan').value.trim();
@@ -2504,12 +2768,13 @@ function simpanDataFinalKunjungan() {
         kendalaGabung = detailKendala;
     }
     
+    // FIX: TAHAP 2 - Gunakan waktu dari input edit, bukan variable otomatis
     const payloadTugas = { 
         action: 'update_selesai', 
         taskId: aktifTaskId, 
-        jamBerangkat: aktifWaktuBerangkat, 
-        jamSampai: aktifWaktuSampai, 
-        jamSelesai: getWaktuSekarang(), 
+        jamBerangkat: jamBerangkatEdit,  // Dari input jamBerangkatEdit
+        jamSampai: jamSampaiEdit,        // Dari input jamSampaiEdit
+        jamSelesai: jamSelesaiEdit,      // Dari input jamSelesaiEdit
         tipe: 'Kunjungan', 
         namaKlien: aktifNamaKlien, 
         alamatKlien: aktifAlamatKlien, 
