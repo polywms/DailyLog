@@ -146,11 +146,12 @@
         <div class="app-container">
             <div class="app-header">
                 <div class="header-title">
-                    <i class="fa-solid fa-crosshairs"></i>
-                    <h1>Daily Log Teknisi <span id="headerTeknisiName" style="color: var(--primary); font-weight: 600;"></span></h1>
-                    <!-- FIX: TAMBAH VERSI APLIKASI -->
-                    <small id="teksVersiApp" style="display: block; font-size: 11px; color: var(--text-muted); margin-top: -2px; font-weight: normal;"></small>
-                </div>
+    <i class="fa-solid fa-crosshairs"></i>
+    <div style="display: flex; flex-direction: column;">
+        <h1 style="margin: 0;">Daily Log Teknisi <span id="headerTeknisiName" style="color: var(--primary); font-weight: 600;"></span></h1>
+        <small id="teksVersiApp" style="font-size: 11px; color: var(--text-muted); font-weight: normal;"></small>
+    </div>
+</div>
                 <div class="header-actions">
                     <button class="btn-menu" id="btnIstirahat" onclick="bukaModalIstirahat()" title="Istirahat"><i class="fa-solid fa-mug-hot"></i></button>
                     <button class="btn-menu" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>

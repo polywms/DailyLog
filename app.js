@@ -2650,9 +2650,7 @@ function setWaktuSekarang(idInput) { document.getElementById(idInput).value = ge
 
 // FIX: TAHAP 2 - Activity Tracker Button Handlers
 function klikTombolPersiapan() {
-    console.log('[klikTombolPersiapan] Clicked');
-    // Persiapan / Standby - Reset ke state awal
-    currentState = 'BERANGKAT';
+    currentState = 'STANDBY';
     aktifTaskId = aktifWaktuBerangkat = aktifWaktuSampai = aktifNamaKlien = aktifAlamatKlien = '';
     document.getElementById('namaCustomer').value = document.getElementById('alamatCustomer').value = '';
     document.getElementById('detailKunjungan').value = document.getElementById('kendalaKunjungan').value = '';
@@ -2662,33 +2660,23 @@ function klikTombolPersiapan() {
 }
 
 function klikTombolMulaiPerjalanan() {
-    console.log('[klikTombolMulaiPerjalanan] Clicked');
-    // FIX: TAHAP 2 - Mulai Perjalanan: Ambil waktu sekarang, catat data, trigger GPS background
     aktifNamaKlien = document.getElementById('namaCustomer').value;
     aktifAlamatKlien = document.getElementById('alamatCustomer').value;
-    if (!aktifNamaKlien || !aktifAlamatKlien) { 
-        alert('⚠️ Isi Nama Customer & Alamatnya terlebih dahulu!'); 
-        return; 
-    }
+    if (!aktifNamaKlien || !aktifAlamatKlien) { alert('⚠️ Isi Nama Customer & Alamatnya terlebih dahulu!'); return; }
     
     aktifWaktuBerangkat = getWaktuSekarang();
     aktifTaskId = "T" + Date.now();
-    currentState = 'SAMPAI';
+    currentState = 'PERJALANAN'; // Status berubah jadi di jalan
     simpanStateTiket();
     kirimDataParsial('simpan_berangkat');
     stopReminderLoop();
-    console.log('[klikTombolMulaiPerjalanan] State updated to SAMPAI, taskId=' + aktifTaskId);
 }
 
 function klikTombolMulaiPengerjaan() {
-    console.log('[klikTombolMulaiPengerjaan] Clicked');
-    // FIX: TAHAP 2 - Mulai Pengerjaan (Tiba): Ambil waktu sekarang, catat sebagai jamSampai, trigger GPS background
     aktifWaktuSampai = getWaktuSekarang();
-    currentState = 'SELESAI';
+    currentState = 'KERJA'; // Status berubah jadi sedang pegang alat
     simpanStateTiket();
     kirimDataParsial('update_sampai');
-    tampilkanFormSelesai();
-    console.log('[klikTombolMulaiPengerjaan] State updated to SELESAI, jamSampai=' + aktifWaktuSampai);
 }
 
 function kirimDataParsial(aksi) {
@@ -2726,33 +2714,61 @@ function batalTiket() {
 }
 
 function renderUIBerdasarkanState() {
-    // FIX: TAHAP 2 - Update untuk Activity Tracker (no more slider)
-    document.getElementById('formCustomerArea').style.display = currentState === 'BERANGKAT' ? 'block' : 'none';
-    document.getElementById('panelAktivitas').style.display = currentState === 'BERANGKAT' ? 'block' : 'none';
+    // 1. Area Form Input Customer
+    document.getElementById('formCustomerArea').style.display = (currentState === 'BERANGKAT' || currentState === 'STANDBY') ? 'block' : 'none';
     
-    // FIX: TAHAP 2 - Show/hide activity buttons based on state
-    if (currentState === 'BERANGKAT') {
-        document.getElementById('btnPersiapan').style.display = 'block';
-        document.getElementById('btnMulaiPerjalanan').style.display = 'block';
-        document.getElementById('btnMulaiPengerjaan').style.display = 'none';
+    // 2. Visibilitas Panel 3 Tombol Utama
+    const panelAktivitas = document.getElementById('panelAktivitas');
+    if (panelAktivitas) {
+        // Jangan sembunyikan panel jika sedang di jalan (PERJALANAN). Sembunyikan kalau sudah SELESAI.
+        panelAktivitas.style.display = (currentState === 'SELESAI' || currentState === 'KERJA') ? 'none' : 'block';
+        
+        const btnStandby = document.getElementById('btnPersiapan');
+        const btnJalan = document.getElementById('btnMulaiPerjalanan');
+        const btnKerja = document.getElementById('btnMulaiPengerjaan');
+        
+        if (btnStandby) btnStandby.style.display = (currentState === 'BERANGKAT' || currentState === 'STANDBY') ? 'block' : 'none';
+        if (btnJalan) btnJalan.style.display = (currentState === 'BERANGKAT' || currentState === 'STANDBY') ? 'block' : 'none';
+        // Tombol Tiba HANYA muncul saat sedang PERJALANAN
+        if (btnKerja) btnKerja.style.display = currentState === 'PERJALANAN' ? 'block' : 'none';
     }
-    
-    if (currentState !== 'BERANGKAT') {
+
+    // 3. Area Tiket Aktif (Warna Merah)
+    if (currentState !== 'BERANGKAT' && currentState !== 'STANDBY') {
         document.getElementById('tiketPerjalanan').style.display = 'block'; 
         document.getElementById('tiketInfoArea').innerHTML = `Menuju: <strong>${aktifNamaKlien}</strong><br>Lokasi: ${aktifAlamatKlien}`; 
         document.getElementById('tiketWaktuBerangkat').innerText = aktifWaktuBerangkat;
+        
         const elS = document.getElementById('tiketWaktuSampai');
-        if(currentState === 'SELESAI') { 
+        if(currentState === 'KERJA' || currentState === 'SELESAI') { 
             elS.innerText = aktifWaktuSampai; 
             elS.style.color = 'var(--primary)'; 
         } else { 
             elS.innerText = '--:--'; 
             elS.style.color = '#adb5bd'; 
         }
+
+        // Jika sedang KERJA, buat tombol khusus Selesai di bawah tiket
+        let btnSelesaiUI = document.getElementById('btnPanggilFormSelesai');
+        if (currentState === 'KERJA') {
+            if (!btnSelesaiUI) {
+                btnSelesaiUI = document.createElement('button');
+                btnSelesaiUI.id = 'btnPanggilFormSelesai';
+                btnSelesaiUI.className = 'btn-primary';
+                btnSelesaiUI.style.marginTop = '15px';
+                btnSelesaiUI.innerHTML = '<i class="fa-solid fa-clipboard-check"></i> Pekerjaan Selesai (Isi Laporan)';
+                btnSelesaiUI.onclick = tampilkanFormSelesai;
+                document.getElementById('tiketPerjalanan').appendChild(btnSelesaiUI);
+            }
+            btnSelesaiUI.style.display = 'block';
+        } else {
+            if (btnSelesaiUI) btnSelesaiUI.style.display = 'none';
+        }
     } else { 
         document.getElementById('tiketPerjalanan').style.display = 'none'; 
     }
     
+    // 4. Form Laporan (Edit Jam Manual)
     document.getElementById('formDetailArea').style.display = currentState === 'SELESAI' ? 'block' : 'none';
 }
 
